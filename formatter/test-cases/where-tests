@@ -1,0 +1,94 @@
+++++
+simple
+----
+SELECT x FROM y WHERE size = 42
+----
+SELECT x
+FROM y
+WHERE size = 42
+----
+
+++++
+AND clause
+----
+SELECT x FROM y WHERE size = 42 AND color = 'blue'
+----
+SELECT x
+FROM y
+WHERE size = 42
+      AND color = 'blue'
+----
+
+++++
+AND clause with escaped string
+----
+SELECT x FROM y WHERE size = 42 AND name = 'O''connor'
+----
+SELECT x
+FROM y
+WHERE size = 42
+      AND name = 'O''connor'
+----
+
+# Note that the formatter removes the extra, unneeded parens around the first
+# clause.
+++++
+complex WHERE clause
+----
+SELECT x FROM y
+ WHERE ((size = 42 AND color = 'blue') OR name = 'Lisa') OR ((date = NOW()) OR status = 'dead')
+----
+SELECT x
+FROM y
+WHERE (
+          size = 42
+          AND color = 'blue'
+      )
+      OR name = 'Lisa'
+      OR (
+          date = NOW()
+          OR status = 'dead'
+      )
+----
+
+++++
+complex WHERE clause
+----
+SELECT x FROM y
+ WHERE ((size = 42 AND color = 'blue') OR name = 'Lisa') AND ((date = NOW()) OR status = 'dead')
+----
+SELECT x
+FROM y
+WHERE (
+          (
+              size = 42
+              AND color = 'blue'
+          )
+          OR name = 'Lisa'
+      )
+      AND (
+          date = NOW()
+          OR status = 'dead'
+      )
+----
+
+# ++++
+# WHERE with subselect
+# ----
+# SELECT x FROM y
+#  WHERE name IN ( SELECT name FROM good_names )
+# ----
+# SELECT x
+# FROM y
+# WHERE (
+#           (
+#               size = 42
+#               AND color = 'blue'
+#           )
+#           OR name = 'Lisa'
+#       )
+#       AND (
+#           date = NOW()
+#           OR status = 'dead'
+#       )
+# ----

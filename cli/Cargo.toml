@@ -1,0 +1,14 @@
+[package]
+name = "pretty-pg"
+version = "0.0.1"
+authors = ["Dave Rolsky <autarch@urth.org>"]
+description = "CLI implementation for pg-pretty"
+repository = "https://github.com/houseabsolute/pg-pretty"
+readme = "README.md"
+license = "GPL-3.0"
+edition = "2018"
+
+[dependencies]
+eyre = "~0.6"
+pg-pretty-formatter = { version = "0.0.1", path = "../formatter" }
+pg-pretty-parser = { version = "0.0.1", path = "../parser" }

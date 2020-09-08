@@ -1,0 +1,23 @@
+[package]
+name = "pg-pretty-parser"
+version = "0.0.1"
+authors = ["Steve Dignam <steve@dignam.xyz>", "Dave Rolsky <autarch@urth.org>"]
+description = "Postgres SQL parser used in pg-pretty"
+repository = "https://github.com/houseabsolute/pg-pretty"
+readme = "README.md"
+license = "GPL-3.0"
+edition = "2018"
+
+[dependencies]
+color-eyre = "~0.5"
+libpg_query-sys = "~0.1"
+serde = { version = "~1", features = ["derive"] }
+serde_json = "~1"
+serde_repr = "~0.1"
+serde_with = "~1"
+strum = "~0.18"
+strum_macros = "~0.18"
+thiserror = "~1"
+
+[dev-dependencies]
+spectral = "~0.6"

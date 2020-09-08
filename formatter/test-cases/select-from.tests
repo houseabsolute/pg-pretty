@@ -1,0 +1,155 @@
+++++
+simple
+----
+SELECT x FROM y
+----
+SELECT x
+FROM y
+----
+
+++++
+2 tables on
+----
+SELECT x FROM y JOIN z ON y.foo = z.foo
+----
+SELECT x
+FROM y
+     JOIN z
+         ON y.foo = z.foo
+----
+
+++++
+2 tables using
+----
+SELECT x FROM y
+          JOIN z
+USING (foo)
+----
+SELECT x
+FROM y
+     JOIN z USING (foo)
+----
+
+++++
+2 tables using 2 cols
+----
+SELECT x FROM y
+          JOIN z
+USING (foo, bar)
+----
+SELECT x
+FROM y
+     JOIN z USING ( foo, bar )
+----
+
+++++
+4 tables
+----
+SELECT a, b, c
+FROM t1
+JOIN t2 USING (foo)
+JOIN t3 USING (bar)
+JOIN t4
+ ON t2.x = t4.y
+----
+SELECT a, b, c
+FROM t1
+     JOIN t2 USING (foo)
+     JOIN t3 USING (bar)
+     JOIN t4
+         ON t2.x = t4.y
+----
+
+++++
+multiple clause ON
+----
+SELECT a, b, c
+FROM t1
+JOIN t2 ON t1.x = t2.x AND t1.y = t2.y
+----
+SELECT a, b, c
+FROM t1
+     JOIN t2
+         ON t1.x = t2.x
+         AND t1.y = t2.y
+----
+
+++++
+very long ON
+----
+SELECT a, b, c
+FROM t1
+JOIN t2 ON t1.x = t2.x AND t1.y = t2.y AND t1.z = t2.z AND t1.a = t2.a AND t1.b = t2.b AND t1.c = t2.c AND t1.d = t2.d
+JOIN t3 USING (foo)
+----
+SELECT a, b, c
+FROM t1
+     JOIN t2
+         ON t1.x = t2.x
+         AND t1.y = t2.y
+         AND t1.z = t2.z
+         AND t1.a = t2.a
+         AND t1.b = t2.b
+         AND t1.c = t2.c
+         AND t1.d = t2.d
+     JOIN t3 USING (foo)
+----
+
+++++
+all aliases
+----
+SELECT a, b, c
+FROM table1 AS t1 LEFT OUTER JOIN table2 AS t2 USING (t1_id)
+----
+SELECT a, b, c
+FROM table1 AS t1
+     LEFT OUTER JOIN table2 AS t2 USING (t1_id)
+----
+
+++++
+subselect
+----
+SELECT a, b, c
+FROM ( SELECT x, y, z FROM t1 JOIN t2 USING (x)) AS sub
+ JOIN t3 ON sub.foo = t3.foo
+----
+SELECT a, b, c
+FROM (
+         SELECT x, y, z
+         FROM t1
+              JOIN t2 USING (x)
+     ) AS sub
+     JOIN t3
+         ON sub.foo = t3.foo
+----
+
+++++
+nested subselect
+----
+SELECT a, b, c
+FROM (
+         SELECT x, y, z
+         FROM t1
+              JOIN t2 USING (x)
+     ) AS sub1
+     JOIN (
+         SELECT x, y, z
+         FROM t3 JOIN ( SELECT x, y,z FROM t4 ) AS sub2a USING (x)
+     ) AS sub2 ON sub1.z = sub2.z
+----
+SELECT a, b, c
+FROM (
+         SELECT x, y, z
+         FROM t1
+              JOIN t2 USING (x)
+     ) AS sub1
+     JOIN (
+         SELECT x, y, z
+         FROM t3
+              JOIN (
+                  SELECT x, y, z
+                  FROM t4
+              ) AS sub2a USING (x)
+     ) AS sub2
+         ON sub1.z = sub2.z
+----
