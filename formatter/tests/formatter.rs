@@ -70,10 +70,36 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
             return Err(anyhow!("Could not parse `{}` ({})", input, e));
         }
         Ok(p) => {
-            let formatted = &f.format_root_stmt(&p[0])?;
-            if expect != formatted {
-                let diff = diff_lines(expect, formatted);
+            let got = &f.format_root_stmt(&p[0])?;
+            if expect != got {
+                if env::var_os("DEBUG_PARSE").is_some() {
+                    println!("{:#?}", p);
+                }
+
+                let diff = diff_lines(expect, got);
                 diff.names("expect", "got").prettytable();
+
+                if env::var_os("DEBUG_WS").is_some() {
+                    println!("Expect");
+                    println!(
+                        "{}",
+                        expect
+                            .chars()
+                            .map(|c| c.escape_debug().to_string())
+                            .collect::<Vec<String>>()
+                            .join(" ")
+                    );
+                    print!("\n");
+                    println!("Got");
+                    println!(
+                        "{}",
+                        got.chars()
+                            .map(|c| c.escape_debug().to_string())
+                            .collect::<Vec<String>>()
+                            .join(" ")
+                    );
+                }
+
                 return Err(anyhow!("{}|{} failed", file, name));
             }
             Ok(())
