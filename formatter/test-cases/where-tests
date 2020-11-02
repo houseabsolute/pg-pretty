@@ -52,43 +52,144 @@ WHERE (
 ----
 
 ++++
-complex WHERE clause
+WHERE with subselect (IN)
 ----
 SELECT x FROM y
- WHERE ((size = 42 AND color = 'blue') OR name = 'Lisa') AND ((date = NOW()) OR status = 'dead')
+ WHERE ( name, 'big' ) IN ( SELECT name, size FROM good_names WHERE 'Bob' = name )
 ----
 SELECT x
 FROM y
-WHERE (
-          (
-              size = 42
-              AND color = 'blue'
-          )
-          OR name = 'Lisa'
-      )
-      AND (
-          date = NOW()
-          OR status = 'dead'
+WHERE ( name, 'big' ) IN (
+          SELECT name, size
+          FROM good_names
+          WHERE 'Bob' = name
       )
 ----
 
-# ++++
-# WHERE with subselect
-# ----
-# SELECT x FROM y
-#  WHERE name IN ( SELECT name FROM good_names )
-# ----
-# SELECT x
-# FROM y
-# WHERE (
-#           (
-#               size = 42
-#               AND color = 'blue'
-#           )
-#           OR name = 'Lisa'
-#       )
-#       AND (
-#           date = NOW()
-#           OR status = 'dead'
-#       )
-# ----
+++++
+WHERE with subselect ( = ANY )
+----
+SELECT x FROM y
+ WHERE ( name, 'big' ) = ANY ( SELECT name, size FROM good_names WHERE 'Bob' = name )
+----
+SELECT x
+FROM y
+WHERE ( name, 'big' ) = ANY(
+          SELECT name, size
+          FROM good_names
+          WHERE 'Bob' = name
+      )
+----
+
+++++
+WHERE with subselect (NOT IN)
+----
+SELECT x FROM y
+ WHERE name NOT IN ( SELECT name FROM good_names WHERE 'Bob' = name )
+----
+SELECT x
+FROM y
+WHERE NOT (
+          name IN (
+              SELECT name
+              FROM good_names
+              WHERE 'Bob' = name
+          )
+      )
+----
+
+++++
+WHERE with subselect ( != ANY )
+----
+SELECT x FROM y
+ WHERE name != ANY( SELECT name FROM good_names WHERE 'Bob' = name )
+----
+SELECT x
+FROM y
+WHERE name <> ANY(
+          SELECT name
+          FROM good_names
+          WHERE 'Bob' = name
+      )
+----
+
+++++
+WHERE with subselect ( < ALL )
+----
+SELECT x FROM y
+ WHERE size < ALL(SELECT size from z)
+----
+SELECT x
+FROM y
+WHERE size < ALL(
+          SELECT size
+          FROM z
+      )
+----
+
+++++
+WHERE with subselect ( EXISTS )
+----
+SELECT x FROM y
+ WHERE EXISTS
+(SELECT 1 FROM z WHERE city = 'NYC')
+----
+SELECT x
+FROM y
+WHERE EXISTS(
+          SELECT 1
+          FROM z
+          WHERE city = 'NYC'
+      )
+----
+
+++++
+WHERE with subselect ( NOT EXISTS )
+----
+SELECT x FROM y
+ WHERE NOT EXISTS
+(SELECT 1 FROM z WHERE city = 'NYC')
+----
+SELECT x
+FROM y
+WHERE NOT (
+          EXISTS(
+              SELECT 1
+              FROM z
+              WHERE city = 'NYC'
+          )
+      )
+----
+
+++++
+WHERE with subselect ( < row compare )
+----
+SELECT x
+FROM y
+WHERE ( name, size ) = (
+          SELECT name, size FROM z WHERE added < NOW()
+      )
+----
+SELECT x
+FROM y
+WHERE ( name, size ) = (
+          SELECT name, size
+          FROM z
+          WHERE added < NOW()
+      )
+----
+
+++++
+WHERE with subselect ( = ARRAY(...) )
+----
+SELECT x
+FROM y
+WHERE name = ARRAY(SELECT name FROM z)
+----
+SELECT x
+FROM y
+WHERE name = ARRAY(
+          SELECT name
+          FROM z
+      )
+----

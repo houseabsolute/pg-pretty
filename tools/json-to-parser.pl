@@ -79,7 +79,11 @@ has to => (
 sub _build_enums ($self) {
     my $enums = decode_json(
         path( $self->from, qw( srcdata enum_defs.json ) )->slurp_utf8 );
-    return { map { $_->%* } values $enums->%* };
+    my %enums = map { $_->%* } values $enums->%*;
+
+    # See https://github.com/lfittl/libpg_query/issues/74.
+    push $enums{BoolExprType}{values}->@*, { name => 'NOT_EXPR' };
+    return \%enums;
 }
 
 my %wanted_struct_paths = map { $_ => 1 } qw(
@@ -129,7 +133,7 @@ sub run ($self) {
         $code .= $self->_one_enum( $name, $enum );
     }
 
-    $code .= $self->_node_enum;
+    $code .= $self->_node_enums;
     $code .= $self->_struct_wrapper_enums;
 
     $code =~ s/\n+$//;
@@ -304,14 +308,14 @@ sub _one_enum ( $self, $name, $enum ) {
     return $code;
 }
 
-sub _node_enum ($self) {
+sub _node_enums ($self) {
     my @nodes = map { [ $_, $self->_rust_name($_) ] }
         sort
         grep { $self->_structs->{$_} } $self->_node_types->@*;
 
     my $code
         = "// A Node is a type that can be referenced from many different types of parsed statements.\n";
-    $code .= "#[derive(Debug, Deserialize, Display, PartialEq, Serialize)]\n";
+    $code .= "#[derive(Debug, Display, Deserialize, PartialEq, Serialize)]\n";
     $code .= "pub enum Node {\n";
 
     # RawStmt will never contain itself, so we don't need the enum indirection
@@ -323,7 +327,7 @@ sub _node_enum ($self) {
         }
         $code .= "$rust_name($rust_name),\n";
     }
-    $code .= "\n}\n";
+    $code .= "\n}\n\n";
 
     return $code;
 }
@@ -483,7 +487,11 @@ my %not_optional = (
     RangeSubselect => { subquery => 1 },
     RangeVar       => { relname  => 1 },
     ResTarget      => { val      => 1 },
-    SortBy         => {
+    RowExpr        => {
+        args       => 1,
+        row_format => 1,
+    },
+    SortBy => {
         node         => 1,
         sortby_dir   => 1,
         sortby_nulls => 1,

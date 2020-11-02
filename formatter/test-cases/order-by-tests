@@ -1,0 +1,83 @@
+++++
+simple
+----
+SELECT x FROM y ORDER BY x
+----
+SELECT x
+FROM y
+ORDER BY x
+----
+
+++++
+multiple columns
+----
+SELECT x FROM y ORDER BY x, y, z
+----
+SELECT x
+FROM y
+ORDER BY x, y, z
+----
+
+++++
+with directions
+----
+SELECT x FROM y ORDER BY a DESC, b ASC, c, d DESC
+----
+SELECT x
+FROM y
+ORDER BY a DESC, b ASC, c, d DESC
+----
+
+++++
+multiple columns NULLS FIRST
+----
+SELECT x FROM y ORDER BY x, y, z  NULLS FIRST
+----
+SELECT x
+FROM y
+ORDER BY x, y, z NULLS FIRST
+----
+
+++++
+multiple columns NULLS LAST
+----
+SELECT x FROM y ORDER BY x, y, z  NULLS LAST
+----
+SELECT x
+FROM y
+ORDER BY x, y, z NULLS LAST
+----
+
+++++
+order by 1, 2, 3
+----
+SELECT x FROM y ORDER BY 1,2,3
+----
+SELECT x
+FROM y
+ORDER BY 1, 2, 3
+----
+
+++++
+multi-line
+----
+SELECT x FROM y ORDER BY very_long_col_name1, very_long_col_name2, very_long_col_name3, very_long_col_name4 , very_long_col_name5
+----
+SELECT x
+FROM y
+ORDER BY very_long_col_name1,
+         very_long_col_name2,
+         very_long_col_name3,
+         very_long_col_name4,
+         very_long_col_name5
+----
+
+++++
+USING
+----
+SELECT x FROM y ORDER BY x USING <@
+----
+SELECT x
+FROM y
+ORDER BY x USING <@
+----

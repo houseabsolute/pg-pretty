@@ -1,0 +1,39 @@
+++++
+simple
+----
+SELECT x, MAX(y) FROM t1 GROUP BY x
+----
+SELECT x, MAX(y)
+FROM t1
+GROUP BY x
+----
+
+++++
+group by 1
+----
+SELECT x, y, MAX(z) FROM t1 GROUP BY 2,1
+----
+SELECT x, y, MAX(z)
+FROM t1
+GROUP BY 2, 1
+----
+
+++++
+grouping sets
+----
+SELECT brand, size, sum(sales) FROM items_sold GROUP BY GROUPING SETS ((brand), (size), ())
+----
+SELECT brand, size, SUM(sales)
+FROM items_sold
+GROUP BY GROUPING SETS ( (brand), (size), () )
+----
+
+++++
+grouping sets
+----
+SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY GROUPING SETS ((brand, color), (size), ())
+----
+SELECT brand, color, size, SUM(sales)
+FROM items_sold
+GROUP BY GROUPING SETS ( ( brand, color ), (size), () )
+----

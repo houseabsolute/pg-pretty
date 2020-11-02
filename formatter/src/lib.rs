@@ -1,4 +1,5 @@
 use pg_pretty_parser::ast::*;
+use scopeguard::guard;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -21,16 +22,21 @@ pub enum Error {
     OrderByUsingWithoutOp,
 }
 
-struct Context {
-    indent: usize,
+#[derive(Debug, PartialEq)]
+enum ContextType {
+    GroupingSet,
+    OrderByUsingClause,
+    SubLink,
 }
 
+#[derive(Debug)]
 pub struct Formatter {
     a_expr_depth: u8,
     bool_expr_depth: u8,
     max_line_length: usize,
-    indent_width: u8,
-    contexts: Vec<Context>,
+    indent_width: usize,
+    indents: Vec<usize>,
+    contexts: Vec<ContextType>,
 }
 
 type R = Result<String, Error>;
@@ -42,7 +48,8 @@ impl Formatter {
             bool_expr_depth: 0,
             max_line_length: 100,
             indent_width: 4,
-            contexts: vec![Context { indent: 0 }],
+            indents: vec![0],
+            contexts: vec![],
         }
     }
 
@@ -54,17 +61,35 @@ impl Formatter {
 
     fn format_node(&mut self, node: &Node) -> R {
         match &node {
-            Node::SelectStmt(s) => Ok(self.format_select_stmt(&s)?),
-            Node::ColumnRef(c) => Ok(self.format_column_ref(&c)?),
-            Node::AConst(a) => Ok(self.format_a_const(&a)?),
-            Node::AExpr(a) => Ok(self.format_a_expr(&a)?),
-            Node::BoolExpr(b) => Ok(self.format_bool_expr(&b)?),
-            Node::FuncCall(f) => Ok(self.format_func_call(&f)?),
-            Node::StringStruct(s) => Ok(self.quote_string(&s.str)),
+            Node::SelectStmt(s) => self.format_select_stmt(&s),
+            Node::ColumnRef(c) => self.format_column_ref(&c),
+            Node::AConst(a) => self.format_a_const(&a),
+            Node::AExpr(a) => self.format_a_expr(&a),
+            Node::BoolExpr(b) => self.format_bool_expr(&b),
+            Node::FuncCall(f) => self.format_func_call(&f),
+            Node::StringStruct(s) => Ok(self.format_string(&s.str)),
+            Node::SubLink(s) => self.format_sub_link(&s),
+            Node::RowExpr(r) => self.format_row_expr(&r),
+            Node::GroupingSet(g) => self.format_grouping_set(&g),
             _ => Err(Error::UnexpectedNode {
                 node: node.to_string(),
                 func: "format_node".to_string(),
             }),
+        }
+    }
+
+    fn format_string(&self, s: &str) -> String {
+        // Depending on the context the string may be a string literal or it
+        // may something like an operator. Tracking the context seems to be
+        // the only way to figure that out. I have no idea if this actually
+        // works in practice though ...
+        match self.contexts.last() {
+            Some(c) => match c {
+                ContextType::SubLink => s.to_string(),
+                ContextType::OrderByUsingClause => s.to_string(),
+                _ => self.quote_string(&s),
+            },
+            None => self.quote_string(&s),
         }
     }
 
@@ -80,9 +105,9 @@ impl Formatter {
         if let Some(w) = &s.where_clause {
             select.push_str(&self.format_where_clause(w)?);
         }
-        // if let Some(g) = &s.group_clause {
-        //     select.push_str(&self.format_group_by_clause(g)?);
-        // }
+        if let Some(g) = &s.group_clause {
+            select.push_str(&self.format_group_by_clause(g)?);
+        }
         // if let Some(h) = &s.having_clause {
         //     select.push_str(&self.format_having_clause(h)?);
         // }
@@ -103,35 +128,17 @@ impl Formatter {
             targets.push(self.format_target_element(t)?);
         }
 
-        let mut select = self.indent_str("SELECT ");
-        self.push_context_from_str(&select);
-        let mut is_one_line = false;
         if can_be_one_line {
-            let one_line = targets.join(", ");
-            if self.fits_on_one_line(&one_line) {
-                select.push_str(&one_line);
-                select.push_str("\n");
-                is_one_line = true;
-            }
+            return Ok(format!(
+                "{}\n",
+                self.one_line_or_many("SELECT ", true, false, &targets)
+            ));
         }
 
-        if !is_one_line {
-            let last = targets.len();
-            for (n, t) in targets.iter().enumerate() {
-                if n != 0 {
-                    select.push_str(&" ".repeat(self.current_indent()));
-                }
-                select.push_str(&t);
-                if n < last - 1 {
-                    select.push_str(",");
-                }
-                select.push_str("\n");
-            }
-        }
-
-        self.pop_context();
-
-        Ok(select)
+        Ok(format!(
+            "{}\n",
+            self.many_lines("SELECT ", true, ["", ""], &targets)
+        ))
     }
 
     fn is_complex_target_element(&mut self, t: &Node) -> Result<bool, Error> {
@@ -170,9 +177,10 @@ impl Formatter {
     fn format_where_clause(&mut self, w: &Node) -> R {
         let mut wh = self.indent_str("WHERE ");
 
-        self.push_context_from_str(&wh);
+        self.push_indent_from_str(&wh);
+
         wh.push_str(&self.format_node(w)?);
-        self.pop_context();
+        self.pop_indent();
 
         wh.push_str("\n");
 
@@ -203,12 +211,18 @@ impl Formatter {
 
     fn format_a_expr(&mut self, a: &AExpr) -> R {
         self.a_expr_depth += 1;
+        let mut formatter = guard(self, |s| {
+            s.a_expr_depth -= 1;
+        });
+
         let e = match a.kind {
-            AExprKind::AExprOp => self.format_infix_expr(&a.lexpr, a.name.as_ref(), &a.rexpr)?,
-            AExprKind::AExprIn => format!("{} IN ( {} )", self.format_node(&a.lexpr)?, "?"),
+            AExprKind::AExprOp => {
+                formatter.format_infix_expr(&a.lexpr, a.name.as_ref(), &a.rexpr)?
+            }
+            AExprKind::AExprIn => format!("{} IN ( {} )", formatter.format_node(&a.lexpr)?, "?"),
             _ => "aexpr".to_string(),
         };
-        self.a_expr_depth -= 1;
+
         Ok(e)
     }
 
@@ -216,19 +230,25 @@ impl Formatter {
     // BoolExpr with many args. If there is a mix of "AND" and "OR", then the
     // args will contain nested BoolExpr clauses. So if our depth is > 1 then
     // we need to add wrapping parens.
+    //
+    // If it's a NOT clause it should only have one child and we don't add
+    // parens around it.
     fn format_bool_expr(&mut self, b: &BoolExpr) -> R {
         let op = match b.boolop {
             BoolExprType::AndExpr => "AND",
             BoolExprType::OrExpr => "OR",
+            BoolExprType::NotExpr => "NOT",
         };
 
         self.bool_expr_depth += 1;
 
-        let mut formatted = b
-            .args
-            .iter()
-            .map(|n| self.format_node(&n))
-            .collect::<Result<Vec<_>, _>>()?;
+        if op == "NOT" {
+            let res = self.format_not_expr(b);
+            self.bool_expr_depth -= 1;
+            return res;
+        }
+
+        let mut args = self.formatted_list(&b.args)?;
 
         let mut expr = String::new();
         // If we're inside a nested boolean expression we start adding parens
@@ -242,21 +262,21 @@ impl Formatter {
             // "((x OR y)...)", we need to indent twice to get the result we
             // want.
             for _ in 1..self.bool_expr_depth {
-                self.push_context_one_level();
+                self.push_indent_one_level();
             }
         };
 
         // The first level of bool expr will be immediately after a "WHERE" or
         // an "ON", and so does not need additional indentation.
         if self.bool_expr_depth == 1 {
-            expr.push_str(&formatted.remove(0));
+            expr.push_str(&args.remove(0));
         } else {
-            expr.push_str(&self.indent_str(&formatted.remove(0)));
+            expr.push_str(&self.indent_str(&args.remove(0)));
         }
         expr.push_str("\n");
 
-        let last = formatted.len();
-        for (n, f) in formatted.iter().enumerate() {
+        let last = args.len();
+        for (n, f) in args.iter().enumerate() {
             expr.push_str(&self.indent_str(&op));
             expr.push_str(" ");
             expr.push_str(&f);
@@ -270,19 +290,48 @@ impl Formatter {
             // add a newline
             expr.push_str("\n");
             // outdent one level
-            self.pop_context();
+            self.pop_indent();
             // add our closing delimiter
             expr.push_str(&self.indent_str(")"));
             self.bool_expr_depth -= 1;
             // outdent back to 1 to match what we did earlier.
             for _ in 1..self.bool_expr_depth {
-                self.pop_context();
+                self.pop_indent();
             }
         } else {
             self.bool_expr_depth -= 1;
         }
 
         Ok(expr)
+    }
+
+    fn format_not_expr(&mut self, b: &BoolExpr) -> R {
+        let arg = self.format_node(&b.args[0])?;
+
+        // XXX - is it also possible to check for cases where we don't
+        // need parens, like "NOT EXISTS"?
+        if !arg.contains("\n") {
+            let one_line = format!("NOT ( {} )", arg);
+            if self.fits_on_one_line(&one_line) {
+                return Ok(one_line);
+            }
+        }
+
+        let mut expr = "NOT (\n".to_string();
+        // If we got back a multiline string the _first_ line will have no
+        // indent (XXX - right?), so we need to indent it to the current
+        // indent.
+        let indented = &self.indent_str(&arg);
+        // Then we need to take the whole multiline string and shove it one
+        // indent level further, so we use this hack ...
+        self.push_indent(self.indent_width);
+        expr.push_str(&self.indent_multiline_str(indented));
+        self.pop_indent();
+
+        expr.push_str("\n");
+        expr.push_str(&self.indent_str(")"));
+
+        return Ok(expr);
     }
 
     fn format_infix_expr(&mut self, left: &Node, op: Option<&List>, right: &OneOrManyNodes) -> R {
@@ -317,12 +366,7 @@ impl Formatter {
             // else that shouldn't be joined by commas?
             OneOrManyNodes::Many(r) => {
                 e.push("(".to_string());
-                e.push(
-                    r.iter()
-                        .map(|n| self.format_node(&n))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .join(", "),
-                );
+                e.push(self.joined_list(r, ", ")?);
                 e.push(")".to_string());
             }
         }
@@ -330,6 +374,7 @@ impl Formatter {
             e.insert(0, "(".to_string());
             e.push(")".to_string());
         }
+
         Ok(e.join(" "))
     }
 
@@ -366,11 +411,7 @@ impl Formatter {
 
         match &f.args {
             Some(a) => {
-                let f = a
-                    .iter()
-                    .map(|n| self.format_node(n))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .join(", ");
+                let f = self.joined_list(&a, ", ")?;
                 if f.contains(&[' ', '('][..]) {
                     arg_is_simple = false;
                 }
@@ -412,18 +453,191 @@ impl Formatter {
     }
 
     // XXX - to be implemented
-    fn format_window_def(&mut self, w: &WindowDefWrapper) -> R {
+    fn format_window_def(&mut self, _w: &WindowDefWrapper) -> R {
         Ok("WINDOW".to_string())
+    }
+
+    fn format_sub_link(&mut self, s: &SubLink) -> R {
+        self.contexts.push(ContextType::SubLink);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        let mut link = match &s.testexpr {
+            Some(n) => formatter.format_node(&*n)?,
+            None => String::new(),
+        };
+
+        link.push_str(&formatter.format_sub_link_oper(s)?);
+        link.push_str("(\n");
+
+        // XXX - is there a better way to do this? Maybe create a new
+        // formatter for each subselectthat inherits the existing one's
+        // indentation?
+        //
+        // We need to reset these every time we enter a FROM or WHERE
+        // clause. Otherwise a subselect ends up inheriting the depth from the
+        // parent.
+        let old_a_expr_depth = formatter.a_expr_depth;
+        formatter.a_expr_depth = 0;
+
+        let old_bool_expr_depth = formatter.bool_expr_depth;
+        formatter.bool_expr_depth = 0;
+
+        let mut formatter = guard(formatter, |mut s| {
+            s.a_expr_depth = old_a_expr_depth;
+            s.bool_expr_depth = old_bool_expr_depth;
+        });
+
+        formatter.push_indent_one_level();
+        link.push_str(&formatter.format_node(&*s.subselect)?);
+        formatter.pop_indent();
+        link.push_str(&formatter.indent_str(")"));
+
+        Ok(link)
+    }
+
+    fn format_sub_link_oper(&mut self, s: &SubLink) -> R {
+        match s.sub_link_type {
+            SubLinkType::ExistsSublink => Ok("EXISTS".to_string()),
+            SubLinkType::AllSublink => match &s.oper_name {
+                None => panic!("Should never have an AllSublink without an operator"),
+                Some(o) => {
+                    // The operator _should_ be a Vec of StringStructs, but
+                    // who knows what wackiness might exist.
+                    let mut j = " ".to_string();
+                    j.push_str(&self.joined_list(&o, " ")?);
+                    j.push_str(" ALL");
+                    Ok(j)
+                }
+            },
+            SubLinkType::AnySublink => match &s.oper_name {
+                None => Ok(" IN ".to_string()),
+                Some(o) => {
+                    // The operator _should_ be a Vec of StringStructs, but
+                    // who knows what wackiness might exist.
+                    let mut j = " ".to_string();
+                    j.push_str(&self.joined_list(&o, " ")?);
+                    j.push_str(" ANY");
+                    Ok(j)
+                }
+            },
+            SubLinkType::RowcompareSublink => match &s.oper_name {
+                None => panic!("Should never have a RowcompareSublink without an operator"),
+                Some(o) => {
+                    // The operator _should_ be a Vec of StringStructs, but
+                    // who knows what wackiness might exist.
+                    let mut j = " ".to_string();
+                    j.push_str(&self.joined_list(&o, " ")?);
+                    Ok(j)
+                }
+            },
+            // I'm not sure exactly what sort of SQL produces these two
+            // options.
+            SubLinkType::ExprSublink => Ok(String::new()),
+            SubLinkType::MultiexprSublink => Ok(String::new()),
+            SubLinkType::ArraySublink => Ok("ARRAY".to_string()),
+            SubLinkType::CteSublink => {
+                panic!("I don't think this can ever happen in a SubLink as opposed to a SubPlan")
+            }
+        }
+    }
+
+    fn format_row_expr(&mut self, r: &RowExpr) -> R {
+        let prefix = match r.row_format {
+            CoercionForm::CoerceExplicitCall => "ROW",
+            CoercionForm::CoerceImplicitCast => "",
+            CoercionForm::CoerceExplicitCast => {
+                panic!("coercion_form should never be CoerceExplicitCast for a RowExpr")
+            }
+        };
+
+        let list = self.formatted_list(&r.args)?;
+        Ok(self.one_line_or_many(prefix, false, true, &list))
+    }
+
+    fn format_grouping_set(&mut self, gs: &GroupingSet) -> R {
+        let is_nested = self.is_in_context(ContextType::GroupingSet);
+
+        self.contexts.push(ContextType::GroupingSet);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        if let GroupingSetKind::GroupingSetEmpty = gs.kind {
+            return Ok("".to_string());
+        }
+
+        let mut grouping_set = match gs.kind {
+            GroupingSetKind::GroupingSetEmpty => {
+                panic!("we already matched GroupingSetEmpty, wtf!")
+            }
+            GroupingSetKind::GroupingSetSimple => "".to_string(),
+            GroupingSetKind::GroupingSetRollup => "ROLLUP ".to_string(),
+            GroupingSetKind::GroupingSetCube => "CUBE ".to_string(),
+            GroupingSetKind::GroupingSetSets => {
+                if is_nested {
+                    "".to_string()
+                } else {
+                    "GROUPING SETS ".to_string()
+                }
+            }
+        };
+
+        let sets = match &gs.content {
+            None => panic!("we should always have content unless the kind if GroupingSetEmpty!"),
+            Some(c) => formatter
+                .formatted_list(c)?
+                .iter()
+                .map(|g| format!("({})", g))
+                .collect::<Vec<String>>(),
+        };
+
+        let space_in_parens = sets.len() > 1;
+        let one_line = sets.join(", ");
+        // leading and trailing parens + optional space
+        let space_len = if space_in_parens { 4 } else { 2 };
+        if grouping_set.len() + space_len + one_line.len() <= formatter.max_line_length {
+            grouping_set.push_str("( ");
+            grouping_set.push_str(&one_line);
+            grouping_set.push_str(" )");
+            return Ok(grouping_set);
+        }
+
+        grouping_set.push_str("(");
+        if space_in_parens {
+            grouping_set.push_str(" ");
+        }
+        formatter.push_indent_from_str(&grouping_set);
+        let last = sets.len();
+        for (n, s) in sets.iter().enumerate() {
+            if n != 0 {
+                grouping_set.push_str(&" ".repeat(formatter.current_indent()));
+            }
+            grouping_set.push_str(s);
+            if n < last - 1 {
+                grouping_set.push_str(",");
+            }
+            grouping_set.push_str(",\n");
+        }
+        formatter.pop_indent();
+
+        if space_in_parens {
+            grouping_set.push_str(" ");
+        }
+        grouping_set.push_str(")");
+
+        Ok(grouping_set)
     }
 
     fn format_from_clause(&mut self, fc: &[Node]) -> R {
         let mut from = self.indent_str("FROM ");
 
-        self.push_context_from_str(&from);
+        self.push_indent_from_str(&from);
         for (n, f) in fc.iter().enumerate() {
             from.push_str(&self.format_from_element(&f, n == 0)?);
         }
-        self.pop_context();
+        self.pop_indent();
 
         from.push_str("\n");
 
@@ -432,9 +646,9 @@ impl Formatter {
 
     fn format_from_element(&mut self, f: &Node, is_first: bool) -> R {
         match f {
-            Node::JoinExpr(j) => Ok(self.format_join_expr(&j, is_first)?),
+            Node::JoinExpr(j) => self.format_join_expr(&j, is_first),
             Node::RangeVar(r) => Ok(self.format_range_var(&r)),
-            Node::RangeSubselect(sub) => Ok(self.format_subselect(&sub)?),
+            Node::RangeSubselect(sub) => self.format_subselect(&sub),
             _ => Ok("from_element".to_string()),
         }
     }
@@ -481,19 +695,19 @@ impl Formatter {
             // clause. This simplifies the formatting and makes it consistent
             // with how we format WHERE clauses.
             e.push_str("\n");
-            self.push_context_one_level();
+            self.push_indent_one_level();
             e.push_str(&self.indent_str("ON "));
             e.push_str(&self.format_node(q)?);
-            self.pop_context();
+            self.pop_indent();
         }
         if let Some(u) = &j.using_clause {
             let using = format!("USING {}", self.format_using_clause(u));
             // + 1 for space before "USING"
             if self.len_after_nl(&e) + using.len() + 1 > self.max_line_length {
                 e.push_str("\n");
-                self.push_context_one_level();
+                self.push_indent_one_level();
                 e.push_str(&self.indent_str(&using));
-                self.pop_context();
+                self.pop_indent();
             } else {
                 e.push_str(" ");
                 e.push_str(&using);
@@ -557,7 +771,15 @@ impl Formatter {
         e
     }
 
-    fn format_order_by_clause(&mut self, order: &Vec<SortByWrapper>) -> R {
+    fn format_group_by_clause(&mut self, group: &[Node]) -> R {
+        let gb = self.formatted_list(group)?;
+        Ok(format!(
+            "{}\n",
+            self.one_line_or_many("GROUP BY ", false, false, &gb)
+        ))
+    }
+
+    fn format_order_by_clause(&mut self, order: &[SortByWrapper]) -> R {
         let mut ob: Vec<String> = vec![];
         for SortByWrapper::SortBy(s) in order {
             let mut el = self.format_node(&s.node)?;
@@ -569,12 +791,13 @@ impl Formatter {
                     el.push_str(" USING ");
                     match &s.use_op {
                         Some(u) => {
-                            el.push_str(
-                                &u.iter()
-                                    .map(|a| self.format_node(a))
-                                    .collect::<Result<Vec<_>, _>>()?
-                                    .join(" "),
-                            );
+                            // Using a scopeguard here doesn't work because it
+                            // takes ownership of formatter and then it's not
+                            // available next time through the loop.
+                            self.contexts.push(ContextType::OrderByUsingClause);
+                            let res = self.formatted_list(u);
+                            self.contexts.pop();
+                            el.push_str(&res?.join(" "));
                         }
                         None => return Err(Error::OrderByUsingWithoutOp),
                     }
@@ -588,48 +811,43 @@ impl Formatter {
             ob.push(el);
         }
 
-        let mut order = "ORDER BY ".to_string();
-        let one_line = ob.join(", ");
-        if self.current_indent() + order.len() + one_line.len() > self.max_line_length {
-            self.push_context_from_str(&order);
-            order.push_str(&ob.remove(0));
-            order.push_str("\n");
-            order.push_str(
-                &ob.iter()
-                    .map(|s| {
-                        let mut i = self.indent_str(s);
-                        i.push_str("\n");
-                        i
-                    })
-                    .collect::<Vec<String>>()
-                    .join(""),
-            )
-        } else {
-            order.push_str(&one_line);
-        }
-
-        Ok(order)
+        Ok(format!(
+            "{}\n",
+            self.one_line_or_many("ORDER BY ", false, false, &ob)
+        ))
     }
 
     fn format_subselect(&mut self, sub: &RangeSubselect) -> R {
+        // See comment in format_sub_link for more details.
+        let old_a_expr_depth = self.a_expr_depth;
+        self.a_expr_depth = 0;
+
+        let old_bool_expr_depth = self.bool_expr_depth;
+        self.bool_expr_depth = 0;
+
+        let mut formatter = guard(self, |s| {
+            s.a_expr_depth = old_a_expr_depth;
+            s.bool_expr_depth = old_bool_expr_depth;
+        });
+
         // We make the indent 0, get the subselect, and then reindent it. This
-        // is a lot simpler than trying to propogate the right context into
+        // is a lot simpler than trying to propagate the right context into
         // the subselect formatting.
-        self.push_context_with_indent(0);
+        formatter.push_indent(0);
         let SelectStmtWrapper::SelectStmt(stmt) = &*sub.subquery;
         // The select will end with a newline, but we want to remove that,
         // then wrap the whole thing in parens, at which point we'll add the
         // trailing newline back.
-        let formatted = &self.format_select_stmt(&stmt)?.trim_end().to_string();
-        self.pop_context();
+        let formatted = &formatter.format_select_stmt(&stmt)?.trim_end().to_string();
+        formatter.pop_indent();
 
-        self.push_context_one_level();
+        formatter.push_indent_one_level();
         let mut s = "(\n".to_string();
-        s.push_str(&self.indent_multiline_str(formatted));
-        self.pop_context();
+        s.push_str(&formatter.indent_multiline_str(formatted));
+        formatter.pop_indent();
 
         s.push_str("\n");
-        s.push_str(&self.indent_str(")"));
+        s.push_str(&formatter.indent_str(")"));
         if let Some(AliasWrapper::Alias(a)) = &sub.alias {
             s.push_str(&Self::alias_name(&a.aliasname));
         }
@@ -637,29 +855,117 @@ impl Formatter {
         Ok(s)
     }
 
-    fn push_context_from_str(&mut self, s: &str) {
+    fn one_line_or_many(
+        &mut self,
+        prefix: &str,
+        indent_prefix: bool,
+        add_parens: bool,
+        items: &[String],
+    ) -> String {
+        let mut one_line = prefix.to_string();
+        if indent_prefix {
+            one_line = self.indent_str(&one_line);
+        }
+
+        let mut parens: [&str; 2] = ["", ""];
+        if add_parens {
+            if items.len() == 1 && !items[0].contains(&['\n', ' '][..]) {
+                parens = ["(", ")"];
+            } else {
+                parens = ["( ", " )"];
+            }
+        }
+
+        one_line.push_str(parens[0]);
+        one_line.push_str(&items.join(", "));
+        one_line.push_str(parens[1]);
+
+        if self.fits_on_one_line(&one_line) {
+            return one_line;
+        }
+
+        self.many_lines(prefix, indent_prefix, parens, items)
+    }
+
+    fn many_lines(
+        &mut self,
+        prefix: &str,
+        indent_prefix: bool,
+        parens: [&str; 2],
+        items: &[String],
+    ) -> String {
+        let mut many = prefix.to_string();
+        if indent_prefix {
+            many = self.indent_str(&many);
+        }
+        self.push_indent_from_str(&many);
+
+        many.push_str(parens[0]);
+
+        let last_idx = items.len() - 1;
+        for (n, i) in items.iter().enumerate() {
+            if n != 0 {
+                many.push_str(&" ".repeat(self.current_indent()));
+            }
+            many.push_str(i);
+            if n < last_idx {
+                many.push_str(",");
+            }
+            many.push_str("\n");
+        }
+
+        self.pop_indent();
+
+        if parens[1] != "" {
+            many.push_str(parens[1]);
+        }
+
+        many
+    }
+
+    fn fits_on_one_line(&self, line: &str) -> bool {
+        self.current_indent() + line.len() <= self.max_line_length
+    }
+
+    fn is_in_context(&self, t: ContextType) -> bool {
+        self.contexts.contains(&t)
+    }
+
+    fn joined_list(&mut self, v: &List, joiner: &str) -> R {
+        Ok(self.formatted_list(v)?.join(joiner))
+    }
+
+    fn formatted_list(&mut self, v: &[Node]) -> Result<Vec<String>, Error> {
+        v.iter()
+            .map(|n| self.format_node(n))
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    fn push_indent_from_str(&mut self, s: &str) {
         let mut indent = s.len();
-        if let Some(c) = self.contexts.last() {
-            indent += c.indent;
+        if let Some(i) = self.indents.last() {
+            indent += i;
         }
-        self.contexts.push(Context { indent });
+        self.push_indent(indent);
     }
 
-    fn push_context_one_level(&mut self) {
-        self.contexts.push(Context {
-            indent: self.current_indent() + self.indent_width as usize,
-        });
+    fn push_indent_one_level(&mut self) {
+        self.push_indent(self.current_indent() + self.indent_width);
     }
 
-    fn push_context_with_indent(&mut self, indent: usize) {
-        self.contexts.push(Context { indent });
+    fn push_indent_by(&mut self, by: usize) {
+        self.push_indent(self.current_indent() + by);
     }
 
-    fn pop_context(&mut self) {
-        if self.contexts.is_empty() {
-            panic!("No more contexts to pop!");
+    fn push_indent(&mut self, indent: usize) {
+        self.indents.push(indent);
+    }
+
+    fn pop_indent(&mut self) {
+        if self.indents.is_empty() {
+            panic!("No more indents to pop!");
         }
-        self.contexts.pop();
+        self.indents.pop();
     }
 
     fn len_after_nl(&self, s: &str) -> usize {
@@ -667,10 +973,6 @@ impl Formatter {
             return s.len() - nl;
         }
         s.len()
-    }
-
-    fn fits_on_one_line(&self, line: &str) -> bool {
-        self.current_indent() + line.len() < self.max_line_length
     }
 
     fn quote_string(&self, s: &str) -> String {
@@ -693,9 +995,9 @@ impl Formatter {
     }
 
     fn current_indent(&self) -> usize {
-        match self.contexts.last() {
-            Some(c) => c.indent,
-            None => panic!("No contexts!"),
+        match self.indents.last() {
+            Some(i) => *i,
+            None => panic!("No indents!"),
         }
     }
 
@@ -839,7 +1141,7 @@ mod tests {
     fn run_tests(tests: Vec<TestCase>, format_fn: FormatFn) -> Result<()> {
         for t in tests {
             let mut f = Formatter::new();
-            f.push_context_with_indent(t.indent);
+            f.push_indent_by(t.indent);
             let formatted = format_fn(&mut f, t.node)?;
             assert_that(&formatted).named(&t.name).is_equal_to(t.expect);
         }

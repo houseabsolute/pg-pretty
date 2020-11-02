@@ -3565,11 +3565,11 @@ pub struct RowCompareExpr {
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct RowExpr {
     // the fields
-    pub args: Option<List>, // List*
+    pub args: List, // List*
     // RECORDOID or a composite type's ID
     pub row_typeid: Option<Oid>, // Oid
     // how to display this node
-    pub row_format: Option<CoercionForm>, // CoercionForm
+    pub row_format: CoercionForm, // CoercionForm
     // list of String, or NIL
     pub colnames: Option<Vec<StringStructWrapper>>, // List*
     // token location, or -1 if unknown
@@ -4735,6 +4735,7 @@ pub enum AlterTableType {
 pub enum BoolExprType {
     AndExpr,
     OrExpr,
+    NotExpr,
 }
 
 // BooleanTest
@@ -5615,7 +5616,7 @@ pub enum XmlOptionType {
 }
 
 // A Node is a type that can be referenced from many different types of parsed statements.
-#[derive(Debug, Deserialize, Display, PartialEq, Serialize)]
+#[derive(Debug, Display, Deserialize, PartialEq, Serialize)]
 pub enum Node {
     #[serde(rename = "A_ArrayExpr")]
     AArrayExpr(AArrayExpr),
@@ -5843,6 +5844,7 @@ pub enum Node {
     XmlExpr(XmlExpr),
     XmlSerialize(XmlSerialize),
 }
+
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub enum AccessPrivWrapper {
     AccessPriv(AccessPriv),
