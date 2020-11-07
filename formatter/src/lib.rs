@@ -488,17 +488,18 @@ impl Formatter {
     fn format_sub_link_oper(&mut self, s: &SubLink) -> R {
         match s.sub_link_type {
             SubLinkType::ExistsSublink => Ok("EXISTS".to_string()),
-            SubLinkType::AllSublink => match &s.oper_name {
-                None => panic!("Should never have an AllSublink without an operator"),
-                Some(o) => {
-                    // The operator _should_ be a Vec of StringStructs, but
-                    // who knows what wackiness might exist.
-                    let mut j = " ".to_string();
-                    j.push_str(&self.joined_list(&o, " ")?);
-                    j.push_str(" ALL");
-                    Ok(j)
-                }
-            },
+            SubLinkType::AllSublink => {
+                let o = s
+                    .oper_name
+                    .as_ref()
+                    .expect("should never have an AllSublink without an operator");
+                // The operator _should_ be a Vec of StringStructs, but
+                // who knows what wackiness might exist.
+                let mut j = " ".to_string();
+                j.push_str(&self.joined_list(&o, " ")?);
+                j.push_str(" ALL");
+                Ok(j)
+            }
             SubLinkType::AnySublink => match &s.oper_name {
                 None => Ok(" IN ".to_string()),
                 Some(o) => {
@@ -510,16 +511,18 @@ impl Formatter {
                     Ok(j)
                 }
             },
-            SubLinkType::RowcompareSublink => match &s.oper_name {
-                None => panic!("Should never have a RowcompareSublink without an operator"),
-                Some(o) => {
-                    // The operator _should_ be a Vec of StringStructs, but
-                    // who knows what wackiness might exist.
-                    let mut j = " ".to_string();
-                    j.push_str(&self.joined_list(&o, " ")?);
-                    Ok(j)
-                }
-            },
+            SubLinkType::RowcompareSublink => {
+                let o = s
+                    .oper_name
+                    .as_ref()
+                    .expect("should never have an RowcompareSublink without an operator");
+
+                // The operator _should_ be a Vec of StringStructs, but
+                // who knows what wackiness might exist.
+                let mut j = " ".to_string();
+                j.push_str(&self.joined_list(&o, " ")?);
+                Ok(j)
+            }
             // I'm not sure exactly what sort of SQL produces these two
             // options.
             SubLinkType::ExprSublink => Ok(String::new()),
