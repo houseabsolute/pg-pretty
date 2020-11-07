@@ -53,6 +53,12 @@ impl Formatter {
         }
     }
 
+    fn new_subformatter(&self) -> Self {
+        let mut sub = Self::new();
+        sub.indents = vec![self.current_indent() + self.indent_width];
+        sub
+    }
+
     pub fn format_root_stmt(&mut self, root: &Root) -> R {
         match root {
             Root::RawStmt(raw) => Ok(self.format_node(&raw.stmt)?),
@@ -471,27 +477,9 @@ impl Formatter {
         link.push_str(&formatter.format_sub_link_oper(s)?);
         link.push_str("(\n");
 
-        // XXX - is there a better way to do this? Maybe create a new
-        // formatter for each subselectthat inherits the existing one's
-        // indentation?
-        //
-        // We need to reset these every time we enter a FROM or WHERE
-        // clause. Otherwise a subselect ends up inheriting the depth from the
-        // parent.
-        let old_a_expr_depth = formatter.a_expr_depth;
-        formatter.a_expr_depth = 0;
+        let mut subformatter = formatter.new_subformatter();
+        link.push_str(&subformatter.format_node(&*s.subselect)?);
 
-        let old_bool_expr_depth = formatter.bool_expr_depth;
-        formatter.bool_expr_depth = 0;
-
-        let mut formatter = guard(formatter, |mut s| {
-            s.a_expr_depth = old_a_expr_depth;
-            s.bool_expr_depth = old_bool_expr_depth;
-        });
-
-        formatter.push_indent_one_level();
-        link.push_str(&formatter.format_node(&*s.subselect)?);
-        formatter.pop_indent();
         link.push_str(&formatter.indent_str(")"));
 
         Ok(link)
@@ -631,9 +619,12 @@ impl Formatter {
     }
 
     fn format_from_clause(&mut self, fc: &[Node]) -> R {
+        let start = "FROM ";
         let mut from = self.indent_str("FROM ");
 
-        self.push_indent_from_str(&from);
+        // We want to indent by the width of "FROM ", not any additional
+        // indent before that string.
+        self.push_indent_from_str(start);
         for (n, f) in fc.iter().enumerate() {
             from.push_str(&self.format_from_element(&f, n == 0)?);
         }
@@ -818,36 +809,21 @@ impl Formatter {
     }
 
     fn format_subselect(&mut self, sub: &RangeSubselect) -> R {
-        // See comment in format_sub_link for more details.
-        let old_a_expr_depth = self.a_expr_depth;
-        self.a_expr_depth = 0;
+        let mut s = "(\n".to_string();
 
-        let old_bool_expr_depth = self.bool_expr_depth;
-        self.bool_expr_depth = 0;
-
-        let mut formatter = guard(self, |s| {
-            s.a_expr_depth = old_a_expr_depth;
-            s.bool_expr_depth = old_bool_expr_depth;
-        });
-
-        // We make the indent 0, get the subselect, and then reindent it. This
-        // is a lot simpler than trying to propagate the right context into
-        // the subselect formatting.
-        formatter.push_indent(0);
         let SelectStmtWrapper::SelectStmt(stmt) = &*sub.subquery;
+        let mut subformatter = self.new_subformatter();
         // The select will end with a newline, but we want to remove that,
         // then wrap the whole thing in parens, at which point we'll add the
         // trailing newline back.
-        let formatted = &formatter.format_select_stmt(&stmt)?.trim_end().to_string();
-        formatter.pop_indent();
-
-        formatter.push_indent_one_level();
-        let mut s = "(\n".to_string();
-        s.push_str(&formatter.indent_multiline_str(formatted));
-        formatter.pop_indent();
+        let formatted = &subformatter
+            .format_select_stmt(&stmt)?
+            .trim_end()
+            .to_string();
+        s.push_str(formatted);
 
         s.push_str("\n");
-        s.push_str(&formatter.indent_str(")"));
+        s.push_str(&self.indent_str(")"));
         if let Some(AliasWrapper::Alias(a)) = &sub.alias {
             s.push_str(&Self::alias_name(&a.aliasname));
         }

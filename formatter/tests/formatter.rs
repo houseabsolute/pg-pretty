@@ -87,7 +87,7 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
                             .chars()
                             .map(|c| c.escape_debug().to_string())
                             .collect::<Vec<String>>()
-                            .join(" ")
+                            .join("")
                     );
                     print!("\n");
                     println!("Got");
@@ -96,7 +96,7 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
                         got.chars()
                             .map(|c| c.escape_debug().to_string())
                             .collect::<Vec<String>>()
-                            .join(" ")
+                            .join("")
                     );
                 }
 
