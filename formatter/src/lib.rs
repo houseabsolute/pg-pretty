@@ -143,7 +143,7 @@ impl Formatter {
 
         Ok(format!(
             "{}\n",
-            self.many_lines("SELECT ", true, ["", ""], &targets)
+            self.many_lines("SELECT ", true, false, &targets)
         ))
     }
 
@@ -559,66 +559,48 @@ impl Formatter {
             return Ok("".to_string());
         }
 
-        let mut grouping_set = match gs.kind {
+        let members = gs
+            .content
+            .as_ref()
+            .expect("we should always have content unless the kind if GroupingSetEmpty!");
+
+        let (grouping_set, needs_parens) = match gs.kind {
             GroupingSetKind::GroupingSetEmpty => {
                 panic!("we already matched GroupingSetEmpty, wtf!")
             }
-            GroupingSetKind::GroupingSetSimple => "".to_string(),
-            GroupingSetKind::GroupingSetRollup => "ROLLUP ".to_string(),
-            GroupingSetKind::GroupingSetCube => "CUBE ".to_string(),
+            GroupingSetKind::GroupingSetSimple => ("".to_string(), false),
+            GroupingSetKind::GroupingSetRollup => ("ROLLUP ".to_string(), false),
+            GroupingSetKind::GroupingSetCube => ("CUBE ".to_string(), false),
             GroupingSetKind::GroupingSetSets => {
                 if is_nested {
-                    "".to_string()
+                    ("".to_string(), true)
                 } else {
-                    "GROUPING SETS ".to_string()
+                    // If we have an unnested set with one member there's no
+                    // need for additional parens.
+                    ("GROUPING SETS ".to_string(), members.len() > 1)
                 }
             }
         };
 
-        let sets = match &gs.content {
-            None => panic!("we should always have content unless the kind if GroupingSetEmpty!"),
-            Some(c) => formatter
-                .formatted_list(c)?
-                .iter()
-                .map(|g| format!("({})", g))
-                .collect::<Vec<String>>(),
-        };
+        let sets = formatter
+            .formatted_list(&members)?
+            .into_iter()
+            .map(|g| {
+                // If the element is a RowExpr it will already have
+                // wrapping parens.
+                if needs_parens {
+                    if g.starts_with("(") && g.ends_with(")") {
+                        g
+                    } else {
+                        format!("({})", g)
+                    }
+                } else {
+                    g
+                }
+            })
+            .collect::<Vec<String>>();
 
-        let space_in_parens = sets.len() > 1;
-        let one_line = sets.join(", ");
-        // leading and trailing parens + optional space
-        let space_len = if space_in_parens { 4 } else { 2 };
-        if grouping_set.len() + space_len + one_line.len() <= formatter.max_line_length {
-            grouping_set.push_str("( ");
-            grouping_set.push_str(&one_line);
-            grouping_set.push_str(" )");
-            return Ok(grouping_set);
-        }
-
-        grouping_set.push_str("(");
-        if space_in_parens {
-            grouping_set.push_str(" ");
-        }
-        formatter.push_indent_from_str(&grouping_set);
-        let last = sets.len();
-        for (n, s) in sets.iter().enumerate() {
-            if n != 0 {
-                grouping_set.push_str(&" ".repeat(formatter.current_indent()));
-            }
-            grouping_set.push_str(s);
-            if n < last - 1 {
-                grouping_set.push_str(",");
-            }
-            grouping_set.push_str(",\n");
-        }
-        formatter.pop_indent();
-
-        if space_in_parens {
-            grouping_set.push_str(" ");
-        }
-        grouping_set.push_str(")");
-
-        Ok(grouping_set)
+        return Ok(formatter.one_line_or_many(&grouping_set, false, true, &sets));
     }
 
     fn format_from_clause(&mut self, fc: &[Node]) -> R {
@@ -863,14 +845,14 @@ impl Formatter {
             return one_line;
         }
 
-        self.many_lines(prefix, indent_prefix, parens, items)
+        self.many_lines(prefix, indent_prefix, add_parens, items)
     }
 
     fn many_lines(
         &mut self,
         prefix: &str,
         indent_prefix: bool,
-        parens: [&str; 2],
+        add_parens: bool,
         items: &[String],
     ) -> String {
         let mut many = prefix.to_string();
@@ -879,25 +861,34 @@ impl Formatter {
         }
         self.push_indent_from_str(&many);
 
-        many.push_str(parens[0]);
+        if add_parens {
+            many.push_str("(\n");
+            self.push_indent_one_level();
+            self.push_indent_one_level();
+        }
 
         let last_idx = items.len() - 1;
         for (n, i) in items.iter().enumerate() {
-            if n != 0 {
+            // If we added parens then every line must be indented the same
+            // way.
+            if add_parens || n != 0 {
                 many.push_str(&" ".repeat(self.current_indent()));
             }
             many.push_str(i);
             if n < last_idx {
                 many.push_str(",");
+                many.push_str("\n");
             }
+        }
+
+        if add_parens {
             many.push_str("\n");
+            self.pop_indent();
+            many.push_str(&self.indent_str(")"));
+            self.pop_indent();
         }
 
         self.pop_indent();
-
-        if parens[1] != "" {
-            many.push_str(parens[1]);
-        }
 
         many
     }

@@ -37,3 +37,86 @@ SELECT brand, color, size, SUM(sales)
 FROM items_sold
 GROUP BY GROUPING SETS ( ( brand, color ), (size), () )
 ----
+
+++++
+rollup
+----
+SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY ROLLUP (brand, color, size)
+----
+SELECT brand, color, size, SUM(sales)
+FROM items_sold
+GROUP BY ROLLUP ( brand, color, size )
+----
+
+++++
+rollup
+----
+SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY ROLLUP ((brand, color), size)
+----
+SELECT brand, color, size, SUM(sales)
+FROM items_sold
+GROUP BY ROLLUP ( ( brand, color ), size )
+----
+
+++++
+cube
+----
+SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY CUBE (brand, color, size)
+----
+SELECT brand, color, size, SUM(sales)
+FROM items_sold
+GROUP BY CUBE ( brand, color, size )
+----
+
+++++
+cube
+----
+SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY CUBE ((brand, color), size)
+----
+SELECT brand, color, size, SUM(sales)
+FROM items_sold
+GROUP BY CUBE ( ( brand, color ), size )
+----
+
+++++
+complex sets
+----
+SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY a, CUBE (b, c), GROUPING SETS ((d), (e))
+----
+SELECT brand, color, size, SUM(sales)
+FROM items_sold
+GROUP BY a, CUBE ( b, c ), GROUPING SETS ( (d), (e) )
+----
+
+++++
+multi-line
+----
+SELECT x FROM y GROUP BY very_long_col_name1, very_long_col_name2, very_long_col_name3, very_long_col_name4 , very_long_col_name5
+----
+SELECT x
+FROM y
+GROUP BY very_long_col_name1,
+         very_long_col_name2,
+         very_long_col_name3,
+         very_long_col_name4,
+         very_long_col_name5
+----
+
+++++
+multi-line complex
+----
+SELECT x FROM y GROUP BY very_long_col_name1, CUBE(very_long_col_name2, very_long_col_name3, very_long_col_name4, very_long_col_name5, very_long_col_name6) , GROUPING SETS (very_long_col_name7), col8
+----
+SELECT x
+FROM y
+GROUP BY very_long_col_name1,
+         CUBE (
+             very_long_col_name2,
+             very_long_col_name3,
+             very_long_col_name4,
+             very_long_col_name5,
+             very_long_col_name6
+         ),
+         GROUPING SETS (very_long_col_name7),
+         col8
+----
