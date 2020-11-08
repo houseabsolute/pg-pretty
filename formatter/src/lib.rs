@@ -24,6 +24,7 @@ pub enum Error {
 
 #[derive(Debug, PartialEq)]
 enum ContextType {
+    AExpr,
     GroupingSet,
     OrderByUsingClause,
     SubLink,
@@ -91,8 +92,9 @@ impl Formatter {
         // works in practice though ...
         match self.contexts.last() {
             Some(c) => match c {
-                ContextType::SubLink => s.to_string(),
+                ContextType::AExpr => s.to_string(),
                 ContextType::OrderByUsingClause => s.to_string(),
+                ContextType::SubLink => s.to_string(),
                 _ => self.quote_string(&s),
             },
             None => self.quote_string(&s),
@@ -114,9 +116,9 @@ impl Formatter {
         if let Some(g) = &s.group_clause {
             select.push_str(&self.format_group_by_clause(g)?);
         }
-        // if let Some(h) = &s.having_clause {
-        //     select.push_str(&self.format_having_clause(h)?);
-        // }
+        if let Some(h) = &s.having_clause {
+            select.push_str(&self.format_having_clause(h)?);
+        }
         if let Some(o) = &s.sort_clause {
             select.push_str(&self.format_order_by_clause(o)?);
         }
@@ -184,7 +186,6 @@ impl Formatter {
         let mut wh = self.indent_str("WHERE ");
 
         self.push_indent_from_str(&wh);
-
         wh.push_str(&self.format_node(w)?);
         self.pop_indent();
 
@@ -217,19 +218,71 @@ impl Formatter {
 
     fn format_a_expr(&mut self, a: &AExpr) -> R {
         self.a_expr_depth += 1;
+        self.contexts.push(ContextType::AExpr);
         let mut formatter = guard(self, |s| {
             s.a_expr_depth -= 1;
+            s.contexts.pop();
         });
 
-        let e = match a.kind {
-            AExprKind::AExprOp => {
-                formatter.format_infix_expr(&a.lexpr, a.name.as_ref(), &a.rexpr)?
+        let op = match &a.kind {
+            AExprKind::AExprParen => panic!("no idea how to handle AExprParen kind of AExpr"),
+            _ => {
+                let o = a.name.as_ref().expect(&format!(
+                    "must have a name defined for a {} kind of AExpr",
+                    a.kind
+                ));
+                formatter.formatted_list(o)?.join(" ")
             }
-            AExprKind::AExprIn => format!("{} IN ( {} )", formatter.format_node(&a.lexpr)?, "?"),
-            _ => "aexpr".to_string(),
         };
 
-        Ok(e)
+        let real_op = match a.kind {
+            AExprKind::AExprOp => op,
+            AExprKind::AExprOpAny => format!("{} ANY", op),
+            AExprKind::AExprOpAll => format!("{} ALL", op),
+            AExprKind::AExprDistinct => "IS DISTINCT FROM".to_string(),
+            AExprKind::AExprNotDistinct => "IS NOT DISTINCT FROM".to_string(),
+            AExprKind::AExprNullif => "NULLIF".to_string(),
+            AExprKind::AExprOf => format!("IS {}OF", formatter.maybe_not(&op)),
+            AExprKind::AExprIn => format!("{}IN", formatter.maybe_not(&op)),
+            // For all the rest we can use the op as is.
+            _ => op.to_string(),
+        };
+
+        formatter.format_infix_expr(&a.lexpr, real_op, &a.rexpr)
+    }
+
+    fn maybe_not(&self, op: &str) -> String {
+        match op {
+            "=" => String::new(),
+            "<>" => "NOT ".to_string(),
+            _ => panic!(format!(
+                "got an AExprOf AExpr with an invalid op name: {}",
+                op
+            )),
+        }
+    }
+
+    fn format_infix_expr(&mut self, left: &Node, op: String, right: &OneOrManyNodes) -> R {
+        let mut e: Vec<String> = vec![];
+        e.push(self.format_node(&left)?);
+        e.push(op);
+        match right {
+            OneOrManyNodes::One(r) => e.push(self.format_node(&r)?),
+            // XXX - Is this right? The right side could be the right side of
+            // something like "foo IN (1, 2)", but could it also be something
+            // else that shouldn't be joined by commas?
+            OneOrManyNodes::Many(r) => {
+                e.push("(".to_string());
+                e.push(self.joined_list(r, ", ")?);
+                e.push(")".to_string());
+            }
+        }
+        if self.a_expr_depth > 1 {
+            e.insert(0, "(".to_string());
+            e.push(")".to_string());
+        }
+
+        Ok(e.join(" "))
     }
 
     // If a bool expr is just a series of "AND" clauses, then we get one
@@ -338,50 +391,6 @@ impl Formatter {
         expr.push_str(&self.indent_str(")"));
 
         return Ok(expr);
-    }
-
-    fn format_infix_expr(&mut self, left: &Node, op: Option<&List>, right: &OneOrManyNodes) -> R {
-        let mut e: Vec<String> = vec![];
-        e.push(self.format_node(&left)?);
-        match op {
-            Some(o) => match o.len() {
-                1 => match &o[0] {
-                    Node::StringStruct(s) => e.push(s.str.clone()),
-                    _ => {
-                        return Err(Error::MalformedInfixExpression {
-                            e: "infix op is not a string".to_string(),
-                        })
-                    }
-                },
-                _ => {
-                    return Err(Error::MalformedInfixExpression {
-                        e: format!("infix op is a list with {} elements", o.len()),
-                    })
-                }
-            },
-            None => {
-                return Err(Error::MalformedInfixExpression {
-                    e: "infix op is empty".to_string(),
-                })
-            }
-        }
-        match right {
-            OneOrManyNodes::One(r) => e.push(self.format_node(&r)?),
-            // XXX - Is this right? The right side could be the right side of
-            // something like "foo IN (1, 2)", but could it also be something
-            // else that shouldn't be joined by commas?
-            OneOrManyNodes::Many(r) => {
-                e.push("(".to_string());
-                e.push(self.joined_list(r, ", ")?);
-                e.push(")".to_string());
-            }
-        }
-        if self.a_expr_depth > 1 {
-            e.insert(0, "(".to_string());
-            e.push(")".to_string());
-        }
-
-        Ok(e.join(" "))
     }
 
     fn format_func_call(&mut self, f: &FuncCall) -> R {
@@ -755,6 +764,18 @@ impl Formatter {
         ))
     }
 
+    fn format_having_clause(&mut self, having: &Node) -> R {
+        let mut h = self.indent_str("HAVING ");
+
+        self.push_indent_from_str(&h);
+        h.push_str(&self.format_node(having)?);
+        self.pop_indent();
+
+        h.push_str("\n");
+
+        Ok(h)
+    }
+
     fn format_order_by_clause(&mut self, order: &[SortByWrapper]) -> R {
         let mut ob: Vec<String> = vec![];
         for SortByWrapper::SortBy(s) in order {
@@ -830,7 +851,9 @@ impl Formatter {
 
         let mut parens: [&str; 2] = ["", ""];
         if add_parens {
-            if items.len() == 1 && !items[0].contains(&['\n', ' '][..]) {
+            // This could be a space with a string in it. It'd be better to be
+            // a bit smarter about the contents somehow.
+            if items.len() == 1 && !items[0].contains(' ') {
                 parens = ["(", ")"];
             } else {
                 parens = ["( ", " )"];

@@ -52,6 +52,17 @@ WHERE (
 ----
 
 ++++
+WHERE with IN
+----
+SELECT x FROM y
+ WHERE name IN ( 'joe', 'liz' )
+----
+SELECT x
+FROM y
+WHERE name IN ( 'joe', 'liz' )
+----
+
+++++
 WHERE with subselect (IN)
 ----
 SELECT x FROM y

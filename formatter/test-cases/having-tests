@@ -1,0 +1,59 @@
+++++
+simple
+----
+SELECT kind, sum(len) AS total
+    FROM films
+    GROUP BY kind
+       HAVING sum(len)<5
+----
+SELECT kind, SUM(len) AS total
+FROM films
+GROUP BY kind
+HAVING SUM(len) < 5
+----
+
+++++
+HAVING or clause
+----
+SELECT kind, sum(len) AS total
+    FROM films
+    GROUP BY kind
+       HAVING sum(len)<5
+OR sum(len) > 10
+----
+SELECT kind, SUM(len) AS total
+FROM films
+GROUP BY kind
+HAVING SUM(len) < 5
+       OR SUM(len) > 10
+----
+
+++++
+HAVING with subselect
+----
+SELECT x, sum(y) FROM t1
+GROUP BY x
+HAVING sum(y) > (SELECT MAX(y) FROM t2)
+----
+SELECT x, SUM(y)
+FROM t1
+GROUP BY x
+HAVING SUM(y) > (
+           SELECT MAX(y)
+           FROM t2
+       )
+----
+
+++++
+HAVING IN
+----
+SELECT x, sum(y) FROM t1
+GROUP BY x
+HAVING sum(y) IN (4,5,6
+)
+----
+SELECT x, SUM(y)
+FROM t1
+GROUP BY x
+HAVING SUM(y) IN ( 4, 5, 6 )
+----
