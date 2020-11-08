@@ -1,6 +1,7 @@
 use pg_pretty_parser::ast::*;
 use scopeguard::guard;
 use thiserror::Error;
+//use trace::trace;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -42,6 +43,8 @@ pub struct Formatter {
 
 type R = Result<String, Error>;
 
+//trace::init_depth_var!();
+
 impl Formatter {
     pub fn new() -> Self {
         Formatter {
@@ -66,6 +69,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_node(&mut self, node: &Node) -> R {
         match &node {
             Node::SelectStmt(s) => self.format_select_stmt(&s),
@@ -101,6 +105,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_select_stmt(&mut self, s: &SelectStmt) -> R {
         let t = match &s.target_list {
             Some(tl) => tl,
@@ -126,26 +131,31 @@ impl Formatter {
         Ok(select)
     }
 
+    //#[trace]
     fn format_select_clause(&mut self, tl: &[Node]) -> R {
-        let mut targets: Vec<String> = vec![];
         let mut can_be_one_line = true;
         for t in tl {
             if self.is_complex_target_element(t)? {
                 can_be_one_line = false;
+                break;
             }
-            targets.push(self.format_target_element(t)?);
         }
 
+        let maker = |f: &mut Self| {
+            tl.into_iter()
+                .map(|t| f.format_target_element(t))
+                .collect::<Result<Vec<_>, _>>()
+        };
         if can_be_one_line {
             return Ok(format!(
                 "{}\n",
-                self.one_line_or_many("SELECT ", true, false, &targets)
+                self.one_line_or_many("SELECT ", true, false, maker)?
             ));
         }
 
         Ok(format!(
             "{}\n",
-            self.many_lines("SELECT ", true, false, &targets)
+            self.many_lines("SELECT ", true, false, maker)?
         ))
     }
 
@@ -162,6 +172,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_target_element(&mut self, t: &Node) -> R {
         match &t {
             Node::ResTarget(rt) => self.format_res_target(rt),
@@ -172,6 +183,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_res_target(&mut self, rt: &ResTarget) -> R {
         let mut f = String::new();
         f.push_str(&self.format_node(&rt.val)?);
@@ -182,6 +194,7 @@ impl Formatter {
         Ok(f)
     }
 
+    //#[trace]
     fn format_where_clause(&mut self, w: &Node) -> R {
         let mut wh = self.indent_str("WHERE ");
 
@@ -194,6 +207,7 @@ impl Formatter {
         Ok(wh)
     }
 
+    //#[trace]
     fn format_column_ref(&mut self, c: &ColumnRef) -> R {
         let mut cols: Vec<String> = vec![];
         for f in &c.fields {
@@ -206,6 +220,7 @@ impl Formatter {
         Ok(cols.join("."))
     }
 
+    //#[trace]
     fn format_a_const(&mut self, a: &AConst) -> R {
         match &a.val {
             Value::StringStruct(s) => Ok(self.quote_string(&s.str)),
@@ -216,6 +231,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_a_expr(&mut self, a: &AExpr) -> R {
         self.a_expr_depth += 1;
         self.contexts.push(ContextType::AExpr);
@@ -262,6 +278,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_infix_expr(&mut self, left: &Node, op: String, right: &OneOrManyNodes) -> R {
         let mut e: Vec<String> = vec![];
         e.push(self.format_node(&left)?);
@@ -272,9 +289,7 @@ impl Formatter {
             // something like "foo IN (1, 2)", but could it also be something
             // else that shouldn't be joined by commas?
             OneOrManyNodes::Many(r) => {
-                e.push("(".to_string());
-                e.push(self.joined_list(r, ", ")?);
-                e.push(")".to_string());
+                e.push(self.one_line_or_many("", false, true, |f| f.formatted_list(&r))?)
             }
         }
         if self.a_expr_depth > 1 {
@@ -292,6 +307,7 @@ impl Formatter {
     //
     // If it's a NOT clause it should only have one child and we don't add
     // parens around it.
+    //#[trace]
     fn format_bool_expr(&mut self, b: &BoolExpr) -> R {
         let op = match b.boolop {
             BoolExprType::AndExpr => "AND",
@@ -364,6 +380,7 @@ impl Formatter {
         Ok(expr)
     }
 
+    //#[trace]
     fn format_not_expr(&mut self, b: &BoolExpr) -> R {
         let arg = self.format_node(&b.args[0])?;
 
@@ -393,6 +410,7 @@ impl Formatter {
         return Ok(expr);
     }
 
+    //#[trace]
     fn format_func_call(&mut self, f: &FuncCall) -> R {
         // There are a number of special case "functions" like "thing AT TIME
         // ZONE ..." and "thing LIKE foo ESCAPE bar" that need to be handled
@@ -468,10 +486,12 @@ impl Formatter {
     }
 
     // XXX - to be implemented
+    //#[trace]
     fn format_window_def(&mut self, _w: &WindowDefWrapper) -> R {
         Ok("WINDOW".to_string())
     }
 
+    //#[trace]
     fn format_sub_link(&mut self, s: &SubLink) -> R {
         self.contexts.push(ContextType::SubLink);
         let mut formatter = guard(self, |s| {
@@ -494,6 +514,7 @@ impl Formatter {
         Ok(link)
     }
 
+    //#[trace]
     fn format_sub_link_oper(&mut self, s: &SubLink) -> R {
         match s.sub_link_type {
             SubLinkType::ExistsSublink => Ok("EXISTS".to_string()),
@@ -543,6 +564,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_row_expr(&mut self, r: &RowExpr) -> R {
         let prefix = match r.row_format {
             CoercionForm::CoerceExplicitCall => "ROW",
@@ -552,10 +574,10 @@ impl Formatter {
             }
         };
 
-        let list = self.formatted_list(&r.args)?;
-        Ok(self.one_line_or_many(prefix, false, true, &list))
+        self.one_line_or_many(prefix, false, true, |f| f.formatted_list(&r.args))
     }
 
+    //#[trace]
     fn format_grouping_set(&mut self, gs: &GroupingSet) -> R {
         let is_nested = self.is_in_context(ContextType::GroupingSet);
 
@@ -565,7 +587,7 @@ impl Formatter {
         });
 
         if let GroupingSetKind::GroupingSetEmpty = gs.kind {
-            return Ok("".to_string());
+            return Ok(String::new());
         }
 
         let members = gs
@@ -577,12 +599,12 @@ impl Formatter {
             GroupingSetKind::GroupingSetEmpty => {
                 panic!("we already matched GroupingSetEmpty, wtf!")
             }
-            GroupingSetKind::GroupingSetSimple => ("".to_string(), false),
+            GroupingSetKind::GroupingSetSimple => (String::new(), false),
             GroupingSetKind::GroupingSetRollup => ("ROLLUP ".to_string(), false),
             GroupingSetKind::GroupingSetCube => ("CUBE ".to_string(), false),
             GroupingSetKind::GroupingSetSets => {
                 if is_nested {
-                    ("".to_string(), true)
+                    (String::new(), true)
                 } else {
                     // If we have an unnested set with one member there's no
                     // need for additional parens.
@@ -591,27 +613,29 @@ impl Formatter {
             }
         };
 
-        let sets = formatter
-            .formatted_list(&members)?
-            .into_iter()
-            .map(|g| {
-                // If the element is a RowExpr it will already have
-                // wrapping parens.
-                if needs_parens {
-                    if g.starts_with("(") && g.ends_with(")") {
-                        g
+        let maker = |f: &mut Self| -> Result<Vec<String>, Error> {
+            Ok(f.formatted_list(&members)?
+                .into_iter()
+                .map(|g| {
+                    // If the element is a RowExpr it will already have
+                    // wrapping parens.
+                    if needs_parens {
+                        if g.starts_with("(") && g.ends_with(")") {
+                            g
+                        } else {
+                            format!("({})", g)
+                        }
                     } else {
-                        format!("({})", g)
+                        g
                     }
-                } else {
-                    g
-                }
-            })
-            .collect::<Vec<String>>();
+                })
+                .collect::<Vec<String>>())
+        };
 
-        return Ok(formatter.one_line_or_many(&grouping_set, false, true, &sets));
+        formatter.one_line_or_many(&grouping_set, false, true, maker)
     }
 
+    //#[trace]
     fn format_from_clause(&mut self, fc: &[Node]) -> R {
         let start = "FROM ";
         let mut from = self.indent_str("FROM ");
@@ -629,6 +653,7 @@ impl Formatter {
         Ok(from)
     }
 
+    //#[trace]
     fn format_from_element(&mut self, f: &Node, is_first: bool) -> R {
         match f {
             Node::JoinExpr(j) => self.format_join_expr(&j, is_first),
@@ -638,6 +663,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_join_expr(&mut self, j: &JoinExpr, is_first: bool) -> R {
         let mut e = String::new();
         if !is_first {
@@ -712,6 +738,7 @@ impl Formatter {
         }
     }
 
+    //#[trace]
     fn format_using_clause(&self, using: &[StringStructWrapper]) -> String {
         let mut c = "(".to_string();
         if using.len() > 1 {
@@ -732,6 +759,7 @@ impl Formatter {
         c
     }
 
+    //#[trace]
     fn format_range_var(&self, r: &RangeVar) -> String {
         let mut names: Vec<String> = vec![];
         if let Some(c) = &r.catalogname {
@@ -756,14 +784,15 @@ impl Formatter {
         e
     }
 
+    //#[trace]
     fn format_group_by_clause(&mut self, group: &[Node]) -> R {
-        let gb = self.formatted_list(group)?;
         Ok(format!(
             "{}\n",
-            self.one_line_or_many("GROUP BY ", false, false, &gb)
+            self.one_line_or_many("GROUP BY ", false, false, |f| f.formatted_list(group))?
         ))
     }
 
+    //#[trace]
     fn format_having_clause(&mut self, having: &Node) -> R {
         let mut h = self.indent_str("HAVING ");
 
@@ -776,44 +805,49 @@ impl Formatter {
         Ok(h)
     }
 
+    //#[trace]
     fn format_order_by_clause(&mut self, order: &[SortByWrapper]) -> R {
-        let mut ob: Vec<String> = vec![];
-        for SortByWrapper::SortBy(s) in order {
-            let mut el = self.format_node(&s.node)?;
-            match s.sortby_dir {
-                SortByDir::SortbyDefault => (),
-                SortByDir::SortbyAsc => el.push_str(" ASC"),
-                SortByDir::SortbyDesc => el.push_str(" DESC"),
-                SortByDir::SortbyUsing => {
-                    el.push_str(" USING ");
-                    match &s.use_op {
-                        Some(u) => {
-                            // Using a scopeguard here doesn't work because it
-                            // takes ownership of formatter and then it's not
-                            // available next time through the loop.
-                            self.contexts.push(ContextType::OrderByUsingClause);
-                            let res = self.formatted_list(u);
-                            self.contexts.pop();
-                            el.push_str(&res?.join(" "));
+        let maker = |f: &mut Self| {
+            let mut ob: Vec<String> = vec![];
+            for SortByWrapper::SortBy(s) in order {
+                let mut el = f.format_node(&s.node)?;
+                match s.sortby_dir {
+                    SortByDir::SortbyDefault => (),
+                    SortByDir::SortbyAsc => el.push_str(" ASC"),
+                    SortByDir::SortbyDesc => el.push_str(" DESC"),
+                    SortByDir::SortbyUsing => {
+                        el.push_str(" USING ");
+                        match &s.use_op {
+                            Some(u) => {
+                                // Using a scopeguard here doesn't work because it
+                                // takes ownership of formatter and then it's not
+                                // available next time through the loop.
+                                f.contexts.push(ContextType::OrderByUsingClause);
+                                let res = f.formatted_list(u);
+                                f.contexts.pop();
+                                el.push_str(&res?.join(" "));
+                            }
+                            None => return Err(Error::OrderByUsingWithoutOp),
                         }
-                        None => return Err(Error::OrderByUsingWithoutOp),
                     }
                 }
+                match s.sortby_nulls {
+                    SortByNulls::SortbyNullsDefault => (),
+                    SortByNulls::SortbyNullsFirst => el.push_str(" NULLS FIRST"),
+                    SortByNulls::SortbyNullsLast => el.push_str(" NULLS LAST"),
+                }
+                ob.push(el);
             }
-            match s.sortby_nulls {
-                SortByNulls::SortbyNullsDefault => (),
-                SortByNulls::SortbyNullsFirst => el.push_str(" NULLS FIRST"),
-                SortByNulls::SortbyNullsLast => el.push_str(" NULLS LAST"),
-            }
-            ob.push(el);
-        }
+            Ok(ob)
+        };
 
         Ok(format!(
             "{}\n",
-            self.one_line_or_many("ORDER BY ", false, false, &ob)
+            self.one_line_or_many("ORDER BY ", false, false, maker)?
         ))
     }
 
+    //#[trace]
     fn format_subselect(&mut self, sub: &RangeSubselect) -> R {
         let mut s = "(\n".to_string();
 
@@ -837,17 +871,23 @@ impl Formatter {
         Ok(s)
     }
 
-    fn one_line_or_many(
+    //#[trace(disable(items_maker))]
+    fn one_line_or_many<F>(
         &mut self,
         prefix: &str,
         indent_prefix: bool,
         add_parens: bool,
-        items: &[String],
-    ) -> String {
+        mut items_maker: F,
+    ) -> R
+    where
+        F: FnMut(&mut Formatter) -> Result<Vec<String>, Error>,
+    {
         let mut one_line = prefix.to_string();
         if indent_prefix {
             one_line = self.indent_str(&one_line);
         }
+
+        let items = items_maker(self)?;
 
         let mut parens: [&str; 2] = ["", ""];
         if add_parens {
@@ -864,32 +904,41 @@ impl Formatter {
         one_line.push_str(&items.join(", "));
         one_line.push_str(parens[1]);
 
-        if self.fits_on_one_line(&one_line) {
-            return one_line;
+        if !one_line.contains("\n") && self.fits_on_one_line(&one_line) {
+            return Ok(one_line);
         }
 
-        self.many_lines(prefix, indent_prefix, add_parens, items)
+        self.many_lines(prefix, indent_prefix, add_parens, items_maker)
     }
 
-    fn many_lines(
+    //#[trace(disable(items_maker))]
+    fn many_lines<F>(
         &mut self,
         prefix: &str,
         indent_prefix: bool,
         add_parens: bool,
-        items: &[String],
-    ) -> String {
+        mut items_maker: F,
+    ) -> R
+    where
+        F: FnMut(&mut Formatter) -> Result<Vec<String>, Error>,
+    {
         let mut many = prefix.to_string();
         if indent_prefix {
             many = self.indent_str(&many);
         }
-        self.push_indent_from_str(&many);
 
+        // If we're adding parens we will indent every line inside the parens
+        // by the standard indentation level. If not, we need indent every
+        // line _after the first_ with the width of the prefix on the first
+        // line.
         if add_parens {
             many.push_str("(\n");
             self.push_indent_one_level();
-            self.push_indent_one_level();
+        } else {
+            self.push_indent_from_str(&many);
         }
 
+        let items = items_maker(self)?;
         let last_idx = items.len() - 1;
         for (n, i) in items.iter().enumerate() {
             // If we added parens then every line must be indented the same
@@ -904,16 +953,14 @@ impl Formatter {
             }
         }
 
-        if add_parens {
-            many.push_str("\n");
-            self.pop_indent();
-            many.push_str(&self.indent_str(")"));
-            self.pop_indent();
-        }
-
         self.pop_indent();
 
-        many
+        if add_parens {
+            many.push_str("\n");
+            many.push_str(&self.indent_str(")"));
+        }
+
+        Ok(many)
     }
 
     fn fits_on_one_line(&self, line: &str) -> bool {

@@ -28,6 +28,11 @@ fn test_all_cases() -> Result<(), Error> {
 }
 
 fn run_tests_from(p: path::PathBuf) -> Result<(), Error> {
+    let mut only = String::new();
+    if let Some(o) = env::var_os("PG_PRETTY_TEST_ONLY") {
+        only = o.into_string().expect("env var is valid UTF-8");
+    }
+
     let cases = String::from_utf8(fs::read(p.clone())?)?;
     lazy_static! {
         static ref RE: Regex = Regex::new(
@@ -53,8 +58,11 @@ fn run_tests_from(p: path::PathBuf) -> Result<(), Error> {
 
     let mut case_count = 0;
     for caps in RE.captures_iter(&cases) {
-        test_one_case(&file, &caps["name"], &caps["input"], &caps["expect"])?;
         case_count += 1;
+        if !only.is_empty() && only != caps["name"] {
+            continue;
+        }
+        test_one_case(&file, &caps["name"], &caps["input"], &caps["expect"])?;
     }
 
     assert_that(&case_count)
@@ -72,14 +80,14 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
         Ok(p) => {
             let got = &f.format_root_stmt(&p[0])?;
             if expect != got {
-                if env::var_os("DEBUG_PARSE").is_some() {
+                if env::var_os("PG_PRETTY_DEBUG_PARSE").is_some() {
                     println!("{:#?}", p);
                 }
 
                 let diff = diff_lines(expect, got);
                 diff.names("expect", "got").prettytable();
 
-                if env::var_os("DEBUG_WS").is_some() {
+                if env::var_os("PG_PRETTY_DEBUG_WS").is_some() {
                     println!("Expect");
                     println!(
                         "{}",

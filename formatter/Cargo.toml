@@ -12,6 +12,7 @@ edition = "2018"
 pg-pretty-parser = { version = "0.0.1", path = "../parser" }
 scopeguard = "~1"
 thiserror = "~1"
+#trace = "~0.1"
 
 [dev-dependencies]
 anyhow = "~1"

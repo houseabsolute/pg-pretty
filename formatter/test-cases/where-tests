@@ -63,6 +63,22 @@ WHERE name IN ( 'joe', 'liz' )
 ----
 
 ++++
+WHERE with very long IN
+----
+SELECT x FROM y
+ WHERE name IN ( 'aaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaab', 'aaaaaaaaaaaaaaaaaaaaaaaac', 'aaaaaaaaaaaaaaaaaaaaaaaad')
+----
+SELECT x
+FROM y
+WHERE name IN (
+          'aaaaaaaaaaaaaaaaaaaaaaaaa',
+          'aaaaaaaaaaaaaaaaaaaaaaaab',
+          'aaaaaaaaaaaaaaaaaaaaaaaac',
+          'aaaaaaaaaaaaaaaaaaaaaaaad'
+      )
+----
+
+++++
 WHERE with subselect (IN)
 ----
 SELECT x FROM y
