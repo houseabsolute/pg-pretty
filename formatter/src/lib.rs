@@ -382,32 +382,8 @@ impl Formatter {
 
     //#[trace]
     fn format_not_expr(&mut self, b: &BoolExpr) -> R {
-        let arg = self.format_node(&b.args[0])?;
-
-        // XXX - is it also possible to check for cases where we don't
-        // need parens, like "NOT EXISTS"?
-        if !arg.contains("\n") {
-            let one_line = format!("NOT ( {} )", arg);
-            if self.fits_on_one_line(&one_line) {
-                return Ok(one_line);
-            }
-        }
-
-        let mut expr = "NOT (\n".to_string();
-        // If we got back a multiline string the _first_ line will have no
-        // indent (XXX - right?), so we need to indent it to the current
-        // indent.
-        let indented = &self.indent_str(&arg);
-        // Then we need to take the whole multiline string and shove it one
-        // indent level further, so we use this hack ...
-        self.push_indent(self.indent_width);
-        expr.push_str(&self.indent_multiline_str(indented));
-        self.pop_indent();
-
-        expr.push_str("\n");
-        expr.push_str(&self.indent_str(")"));
-
-        return Ok(expr);
+        let maker = |f: &mut Self| Ok(vec![f.format_node(&b.args[0])?]);
+        self.one_line_or_many("NOT ", false, true, maker)
     }
 
     //#[trace]
@@ -964,6 +940,9 @@ impl Formatter {
     }
 
     fn fits_on_one_line(&self, line: &str) -> bool {
+        if line.contains("\n") {
+            return false;
+        }
         self.current_indent() + line.len() <= self.max_line_length
     }
 
@@ -1023,15 +1002,6 @@ impl Formatter {
         let mut indented = " ".repeat(self.current_indent());
         indented.push_str(s);
         indented
-    }
-
-    fn indent_multiline_str(&self, s: &str) -> String {
-        let mut indented = " ".repeat(self.current_indent());
-        indented.push_str(s);
-
-        let mut replacement = "\n".to_owned();
-        replacement.push_str(&" ".repeat(self.current_indent()));
-        indented.replace("\n", &replacement)
     }
 
     fn current_indent(&self) -> usize {
