@@ -603,6 +603,8 @@ sub _rust_name ( $, $name ) {
     return $ucc =~ s/Aexpr/AExpr/r;
 }
 
+__PACKAGE__->meta->make_immutable;
+
 package main;
 
 G->new_with_options->run;
