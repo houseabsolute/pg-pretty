@@ -12,7 +12,8 @@ use std::{env, fs, path};
 #[test]
 fn test_all_cases() -> Result<(), Error> {
     let mut case_dir = env::current_dir()?;
-    case_dir.push("test-cases");
+    case_dir.push("tests");
+    case_dir.push("cases");
     let mut file_count = 0;
     for entry in fs::read_dir(case_dir)? {
         let path = entry?.path();
