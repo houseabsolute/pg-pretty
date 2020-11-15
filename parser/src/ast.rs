@@ -4201,10 +4201,10 @@ pub struct TruncateStmt {
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct TypeCast {
     // the expression being casted
-    pub arg: Option<Box<Node>>, // Node*
+    pub arg: Box<Node>, // Node*
     // the target type
     #[serde(rename = "typeName")]
-    pub type_name: Option<TypeNameWrapper>, // TypeName*
+    pub type_name: TypeNameWrapper, // TypeName*
     // token location, or -1 if unknown
     pub location: Option<i64>, // int
 }

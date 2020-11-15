@@ -57,3 +57,17 @@ FROM t1
 GROUP BY x
 HAVING SUM(y) IN ( 4, 5, 6 )
 ----
+
+++++
+HAVING with type cast
+----
+SELECT kind, sum(len) AS total
+    FROM films
+    GROUP BY kind
+    HAVING sum(len) > interval '5 hours'
+----
+SELECT kind, SUM(len) AS total
+FROM films
+GROUP BY kind
+HAVING SUM(len) > '5 hours'::interval
+----

@@ -82,6 +82,7 @@ impl Formatter {
             Node::SubLink(s) => self.format_sub_link(&s),
             Node::RowExpr(r) => self.format_row_expr(&r),
             Node::GroupingSet(g) => self.format_grouping_set(&g),
+            Node::TypeCast(t) => self.format_type_cast(&t),
             _ => Err(Error::UnexpectedNode {
                 node: node.to_string(),
                 func: "format_node".to_string(),
@@ -924,6 +925,30 @@ impl Formatter {
             "{}\n",
             self.one_line_or_many("ORDER BY ", false, false, maker)?
         ))
+    }
+
+    //#[trace]
+    fn format_type_cast(&mut self, type_cast: &TypeCast) -> R {
+        let mut cast = self.format_node(&*type_cast.arg)?;
+        cast.push_str("::");
+        cast.push_str(&self.format_type_name(&type_cast.type_name)?);
+
+        Ok(cast)
+    }
+
+    //#[trace]
+    fn format_type_name(&mut self, type_name: &TypeNameWrapper) -> R {
+        match type_name {
+            TypeNameWrapper::TypeName(t) => Ok(t
+                .names
+                .iter()
+                // Is this clone necessary? It feels like there should be a
+                // way to work with the original reference until the join.
+                .map(|StringStructWrapper::StringStruct(n)| n.str.clone())
+                .filter(|n| n != "pg_catalog")
+                .collect::<Vec<String>>()
+                .join(".")),
+        }
     }
 
     //#[trace]

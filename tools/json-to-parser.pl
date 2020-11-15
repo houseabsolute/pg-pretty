@@ -503,6 +503,10 @@ my %not_optional = (
         subLinkType => 1,
         subselect   => 1,
     },
+    TypeCast => {
+        arg      => 1,
+        typeName => 1
+    },
     TypeName => { names => 1 },
     Value    => { val   => 1 },
 );
