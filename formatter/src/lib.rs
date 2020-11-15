@@ -127,6 +127,9 @@ impl Formatter {
         if let Some(o) = &s.sort_clause {
             select.push_str(&self.format_order_by_clause(o)?);
         }
+        if let Some(l) = &s.locking_clause {
+            select.push_str(&self.format_locking_clause(l)?);
+        }
 
         Ok(select)
     }
@@ -807,6 +810,78 @@ impl Formatter {
         h.push_str("\n");
 
         Ok(h)
+    }
+
+    //#[trace]
+    fn format_locking_clause(&mut self, locking: &[LockingClauseWrapper]) -> R {
+        let mut formatted: Vec<String> = vec![];
+
+        for LockingClauseWrapper::LockingClause(c) in locking {
+            let s = match &c.strength {
+                LockClauseStrength::LcsNone => panic!("got locking strength of none!"),
+                LockClauseStrength::LcsForkeyshare => "KEY SHARE",
+                LockClauseStrength::LcsForshare => "SHARE",
+                LockClauseStrength::LcsFornokeyupdate => "NO KEY UPDATE",
+                LockClauseStrength::LcsForupdate => "UPDATE",
+            };
+
+            let mut rels: Vec<String> = vec![];
+            if let Some(lr) = &c.locked_rels {
+                rels = lr
+                    .into_iter()
+                    .map(|RangeVarWrapper::RangeVar(r)| self.format_range_var(r))
+                    .collect();
+            }
+
+            let mut wait = "";
+            if let Some(w) = &c.wait_policy {
+                wait = match w {
+                    LockWaitPolicy::Lockwaitblock => "",
+                    LockWaitPolicy::Lockwaitskip => "SKIP LOCKED",
+                    LockWaitPolicy::Lockwaiterror => "NOWAIT",
+                }
+            }
+
+            let mut one_line = self.indent_str(&format!("FOR {}", s));
+            if !rels.is_empty() {
+                one_line.push_str(" OF ");
+                one_line.push_str(&rels.join(", "));
+            }
+            if !wait.is_empty() {
+                one_line.push_str(" ");
+                one_line.push_str(wait);
+            }
+            if self.fits_on_one_line(&one_line) {
+                formatted.push(one_line);
+                continue;
+            }
+
+            let mut many = self.indent_str(&format!("FOR {}\n", s));
+            self.push_indent_one_level();
+            if !rels.is_empty() {
+                let of = "OF ";
+                for (n, r) in rels.iter().enumerate() {
+                    if n == 0 {
+                        many.push_str(&self.indent_str(of));
+                    } else {
+                        many.push_str(&self.indent_str(&" ".repeat(of.len())));
+                    }
+                    many.push_str(r);
+                    if n != rels.len() - 1 {
+                        many.push_str(",");
+                    }
+                    many.push_str("\n");
+                }
+            }
+            if !wait.is_empty() {
+                many.push_str(&self.indent_str(wait));
+            }
+            self.pop_indent();
+
+            formatted.push(many);
+        }
+
+        Ok(format!("{}\n", formatted.join("\n")))
     }
 
     //#[trace]

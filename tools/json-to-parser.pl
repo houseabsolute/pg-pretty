@@ -427,6 +427,7 @@ my %overrides = (
     DefElem        => { arg      => 'DefElemArgs' },
     Float          => { str      => 'String' },
     Integer        => { ival     => 'i64' },
+    LockingClause  => { lockedRels => 'Option<Vec<RangeVarWrapper>>' },
     RangeSubselect => { subquery => 'Box<SelectStmtWrapper>' },
     RawStmt        => {
         stmt => 'Node',
@@ -485,6 +486,7 @@ my %not_optional = (
         larg     => 1,
         rarg     => 1,
     },
+    LockingClause  => { strength => 1 },
     RangeSubselect => { subquery => 1 },
     RangeVar       => { relname  => 1 },
     ResTarget      => { val      => 1 },
@@ -537,7 +539,7 @@ sub _rust_base_type ( $self, $field ) {
     return 'Vec<Vec<StringStructWrapper>>'
         if $comment =~ /[Ll]ist of list of (?:Value strings|String)/;
     return 'Vec<StringStructWrapper>'
-        if $comment =~ /[Ll]ist of (?:Value strings|String)/;
+        if $comment =~ /[Ll]ist of (?:Value strings|String|\(T_String\) Values)/;
 
     if ( $comment =~ /[Ll]ist of ([A-Z][A-Za-z]+)(?: nodes)?/ ) {
         my $name = $1;

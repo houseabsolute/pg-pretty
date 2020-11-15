@@ -1,0 +1,98 @@
+++++
+SELECT FOR UPDATE
+----
+SELECT * FROM mytable FOR UPDATE
+----
+SELECT *
+FROM mytable
+FOR UPDATE
+----
+
+++++
+SELECT FOR UPDATE NOWAIT
+----
+SELECT * FROM mytable FOR KEY SHARE OF mytable NOWAIT
+----
+SELECT *
+FROM mytable
+FOR KEY SHARE OF mytable NOWAIT
+----
+
+++++
+SELECT FOR UPDATE SKIP LOCKED
+----
+SELECT * FROM mytable FOR KEY SHARE OF mytable SKIP LOCKED
+----
+SELECT *
+FROM mytable
+FOR KEY SHARE OF mytable SKIP LOCKED
+----
+
+++++
+SELECT FOR UPDATE multiple locks
+----
+SELECT * FROM mytable JOIN othertable USING (id) FOR KEY SHARE OF mytable SKIP LOCKED FOR NO KEY UPDATE OF othertable NOWAIT
+----
+SELECT *
+FROM mytable
+     JOIN othertable USING (id)
+FOR KEY SHARE OF mytable SKIP LOCKED
+FOR NO KEY UPDATE OF othertable NOWAIT
+----
+
+++++
+SELECT FOR UPDATE with long table list
+----
+SELECT * FROM mytable FOR UPDATE OF very_long_table1, very_long_table2, very_long_table3, very_long_table4, very_long_table5, very_long_table6 NOWAIT
+----
+SELECT *
+FROM mytable
+FOR UPDATE
+    OF very_long_table1,
+       very_long_table2,
+       very_long_table3,
+       very_long_table4,
+       very_long_table5,
+       very_long_table6
+    NOWAIT
+----
+
+++++
+SELECT FOR UPDATE with multiple long table lists
+----
+SELECT * FROM mytable FOR UPDATE OF very_long_table1, very_long_table2, very_long_table3, very_long_table4, very_long_table5, very_long_table6 NOWAIT
+    FOR KEY SHARE OF very_long_table1, very_long_table2, very_long_table3, very_long_table4, very_long_table5, very_long_table6 SKIP LOCKED
+----
+SELECT *
+FROM mytable
+FOR UPDATE
+    OF very_long_table1,
+       very_long_table2,
+       very_long_table3,
+       very_long_table4,
+       very_long_table5,
+       very_long_table6
+    NOWAIT
+FOR KEY SHARE
+    OF very_long_table1,
+       very_long_table2,
+       very_long_table3,
+       very_long_table4,
+       very_long_table5,
+       very_long_table6
+    SKIP LOCKED
+----
+
+++++
+SELECT FOR UPDATE in subselect
+----
+SELECT * FROM (SELECT * FROM mytable FOR UPDATE) ss ORDER BY column1
+----
+SELECT *
+FROM (
+         SELECT *
+         FROM mytable
+         FOR UPDATE
+     ) AS ss
+ORDER BY column1
+----

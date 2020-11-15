@@ -30,6 +30,7 @@ pub enum OneOrManyNodes {
 pub enum ColumnRefField {
     #[serde(rename = "String")]
     StringStruct(StringStruct),
+    #[serde(rename = "A_Star")]
     AStar(AStar),
 }
 
@@ -1745,7 +1746,7 @@ pub struct CreateTrigStmt {
     // qual. name of function to call
     pub funcname: Option<List>, // List*
     // list of (T_String) Values or NIL
-    pub args: Option<List>, // List*
+    pub args: Option<Vec<StringStructWrapper>>, // List*
     // ROW/STATEMENT
     #[serde(default)]
     pub row: bool, // bool
@@ -2580,8 +2581,8 @@ pub struct LockStmt {
 pub struct LockingClause {
     // FOR [KEY] UPDATE/SHARE relations
     #[serde(rename = "lockedRels")]
-    pub locked_rels: Option<List>, // List*
-    pub strength: Option<LockClauseStrength>, // LockClauseStrength
+    pub locked_rels: Option<Vec<RangeVarWrapper>>, // List*
+    pub strength: LockClauseStrength, // LockClauseStrength
     // NOWAIT and SKIP LOCKED
     #[serde(rename = "waitPolicy")]
     pub wait_policy: Option<LockWaitPolicy>, // LockWaitPolicy

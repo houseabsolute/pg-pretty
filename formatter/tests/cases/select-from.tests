@@ -8,6 +8,15 @@ FROM y
 ----
 
 ++++
+SELECT *
+----
+SELECT * FROM y
+----
+SELECT *
+FROM y
+----
+
+++++
 2 tables on
 ----
 SELECT x FROM y JOIN z ON y.foo = z.foo
