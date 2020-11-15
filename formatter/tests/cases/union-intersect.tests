@@ -1,0 +1,125 @@
+++++
+SELECT UNION SELECT
+----
+SELECT distributors.name
+    FROM distributors
+    WHERE distributors.name LIKE 'W%'
+UNION
+SELECT actors.name
+    FROM actors
+    WHERE actors.name LIKE 'W%'
+----
+SELECT distributors.name
+FROM distributors
+WHERE distributors.name ~~ 'W%'
+UNION
+SELECT actors.name
+FROM actors
+WHERE actors.name ~~ 'W%'
+----
+
+++++
+SELECT UNION ALL SELECT
+----
+SELECT distributors.name
+    FROM distributors
+    WHERE distributors.name LIKE 'W%'
+UNION ALL
+SELECT actors.name
+    FROM actors
+    WHERE actors.name LIKE 'W%'
+----
+SELECT distributors.name
+FROM distributors
+WHERE distributors.name ~~ 'W%'
+UNION ALL
+SELECT actors.name
+FROM actors
+WHERE actors.name ~~ 'W%'
+----
+
+++++
+SELECT UNION SELECT UNION SELECT
+----
+SELECT distributors.name
+    FROM distributors
+    WHERE distributors.name LIKE 'W%'
+UNION
+SELECT actors.name
+    FROM actors
+    WHERE actors.name LIKE 'W%'
+UNION
+SELECT directors.name
+    FROM directors
+    WHERE directors.name LIKE 'W%'
+----
+SELECT distributors.name
+FROM distributors
+WHERE distributors.name ~~ 'W%'
+UNION
+SELECT actors.name
+FROM actors
+WHERE actors.name ~~ 'W%'
+UNION
+SELECT directors.name
+FROM directors
+WHERE directors.name ~~ 'W%'
+----
+
+
+++++
+SELECT UNION SELECT INTERSECT SELECT
+----
+SELECT distributors.name
+    FROM distributors
+    WHERE distributors.name LIKE 'W%'
+UNION
+SELECT actors.name
+    FROM actors
+    WHERE actors.name LIKE 'W%'
+INTERSECT
+SELECT directors.name
+    FROM directors
+    WHERE directors.name LIKE 'W%'
+----
+SELECT distributors.name
+FROM distributors
+WHERE distributors.name ~~ 'W%'
+UNION
+SELECT actors.name
+FROM actors
+WHERE actors.name ~~ 'W%'
+INTERSECT
+SELECT directors.name
+FROM directors
+WHERE directors.name ~~ 'W%'
+----
+
+
+++++
+SELECT INTERSECT SELECT EXCEPT SELECT
+----
+SELECT distributors.name
+    FROM distributors
+    WHERE distributors.name LIKE 'W%'
+INTERSECT
+SELECT actors.name
+    FROM actors
+    WHERE actors.name LIKE 'W%'
+EXCEPT
+SELECT directors.name
+    FROM directors
+    WHERE directors.name LIKE 'W%'
+----
+SELECT distributors.name
+FROM distributors
+WHERE distributors.name ~~ 'W%'
+INTERSECT
+SELECT actors.name
+FROM actors
+WHERE actors.name ~~ 'W%'
+EXCEPT
+SELECT directors.name
+FROM directors
+WHERE directors.name ~~ 'W%'
+----

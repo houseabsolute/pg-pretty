@@ -3728,7 +3728,7 @@ pub struct SelectStmt {
     #[serde(rename = "withClause")]
     pub with_clause: Option<WithClauseWrapper>, // WithClause*
     // type of set op
-    pub op: Option<SetOperation>, // SetOperation
+    pub op: SetOperation, // SetOperation
     // ALL specified?
     #[serde(default)]
     pub all: bool, // bool

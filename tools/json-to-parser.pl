@@ -421,20 +421,21 @@ my %type_map = (
 $type_map{$_} = 'Box<Node>' for 'Node*', 'Expr', 'Expr*';
 
 my %overrides = (
-    AExpr          => { rexpr    => 'OneOrManyNodes' },
-    Alias          => { colnames => 'Option<Vec<StringStruct>>' },
-    ColumnRef      => { fields   => 'Vec<ColumnRefField>' },
-    DefElem        => { arg      => 'DefElemArgs' },
-    Float          => { str      => 'String' },
-    Integer        => { ival     => 'i64' },
+    AExpr          => { rexpr      => 'OneOrManyNodes' },
+    Alias          => { colnames   => 'Option<Vec<StringStruct>>' },
+    ColumnRef      => { fields     => 'Vec<ColumnRefField>' },
+    DefElem        => { arg        => 'DefElemArgs' },
+    Float          => { str        => 'String' },
+    Integer        => { ival       => 'i64' },
     LockingClause  => { lockedRels => 'Option<Vec<RangeVarWrapper>>' },
-    RangeSubselect => { subquery => 'Box<SelectStmtWrapper>' },
+    RangeSubselect => { subquery   => 'Box<SelectStmtWrapper>' },
     RawStmt        => {
         stmt => 'Node',
     },
     SelectStmt => {
         distinctClause => 'Option<Vec<Option<Node>>>',
         valuesLists    => 'Option<Vec<List>>',
+        op             => 'SetOperation',
         larg           => 'Option<Box<SelectStmtWrapper>>',
         rarg           => 'Option<Box<SelectStmtWrapper>>',
     },

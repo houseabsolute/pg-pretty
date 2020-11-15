@@ -9,6 +9,8 @@ pub enum Error {
     UnexpectedNode { node: String, func: String },
     #[error("no target list for select")]
     NoTargetListForSelect,
+    #[error("missing {} arg for {} op", .side, .op)]
+    MissingSideForOp { side: String, op: String },
     #[error("infix expression is {}", e)]
     MalformedInfixExpression { e: String },
     #[error("join type is {} but there is no Pg keyword for this", jt)]
@@ -108,6 +110,41 @@ impl Formatter {
 
     //#[trace]
     fn format_select_stmt(&mut self, s: &SelectStmt) -> R {
+        if let Some( mut op) = self.match_op(&s.op) {
+            // XXX - this is so gross. I think the unstable box matching
+            // syntax would make this much less gross.
+            let left = match &s.larg {
+                Some(l) => {
+                    let SelectStmtWrapper::SelectStmt(l) = &**l;
+                    self.format_select_stmt(l)?
+                }
+                None => {
+                    return Err(Error::MissingSideForOp {
+                        side: "left".to_string(),
+                        op,
+                    })
+                }
+            };
+            let right = match &s.rarg {
+                Some(r) => {
+                    let SelectStmtWrapper::SelectStmt(r) = &**r;
+                    self.format_select_stmt(r)?
+                }
+                None => {
+                    return Err(Error::MissingSideForOp {
+                        side: "left".to_string(),
+                        op,
+                    })
+                }
+            };
+
+            if s.all {
+                op.push_str(" ALL");
+            }
+
+            return Ok(format!("{}{}\n{}", left, op, right));
+        }
+
         let t = match &s.target_list {
             Some(tl) => tl,
             None => return Err(Error::NoTargetListForSelect),
@@ -133,6 +170,15 @@ impl Formatter {
         }
 
         Ok(select)
+    }
+
+    fn match_op(&self, op: &SetOperation) -> Option<String> {
+        match op {
+            SetOperation::SetopUnion => Some("UNION".to_string()),
+            SetOperation::SetopIntersect => Some("INTERSECT".to_string()),
+            SetOperation::SetopExcept => Some("EXCEPT".to_string()),
+            SetOperation::SetopNone => None,
+        }
     }
 
     //#[trace]
