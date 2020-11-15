@@ -111,7 +111,7 @@ impl Formatter {
             Some(tl) => tl,
             None => return Err(Error::NoTargetListForSelect),
         };
-        let mut select = self.format_select_clause(t)?;
+        let mut select = self.format_select_clause(t, s.distinct_clause.as_ref())?;
         if let Some(f) = &s.from_clause {
             select.push_str(&self.format_from_clause(f)?);
         }
@@ -132,12 +132,40 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_select_clause(&mut self, tl: &[Node]) -> R {
-        let mut can_be_one_line = true;
-        for t in tl {
-            if self.is_complex_target_element(t)? {
-                can_be_one_line = false;
-                break;
+    fn format_select_clause(&mut self, tl: &[Node], d: Option<&Vec<Option<Node>>>) -> R {
+        let mut prefix = "SELECT ".to_string();
+
+        if let Some(distinct) = d {
+            if distinct.len() == 1 && distinct[0].is_none() {
+                prefix.push_str("DISTINCT ");
+            } else {
+                prefix.push_str("DISTINCT ON ");
+                // All of the elements should be Some(...).
+                let maker = |f: &mut Self| {
+                    distinct
+                        .into_iter()
+                        .map(|c| match c {
+                            Some(c) => f.format_node(c),
+                            None => panic!("multi-element distinct clause contains a null!"),
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                };
+                prefix = self.one_line_or_many(&prefix, false, true, maker)?;
+                if prefix.contains("\n") {
+                    prefix.push_str("\n");
+                } else {
+                    prefix.push_str(" ");
+                }
+            }
+        }
+
+        let mut can_be_one_line = !prefix.contains("\n");
+        if can_be_one_line {
+            for t in tl {
+                if self.is_complex_target_element(t)? {
+                    can_be_one_line = false;
+                    break;
+                }
             }
         }
 
@@ -149,13 +177,13 @@ impl Formatter {
         if can_be_one_line {
             return Ok(format!(
                 "{}\n",
-                self.one_line_or_many("SELECT ", true, false, maker)?
+                self.one_line_or_many(&prefix, true, false, maker)?
             ));
         }
 
         Ok(format!(
             "{}\n",
-            self.many_lines("SELECT ", true, false, maker)?
+            self.many_lines(&prefix, true, false, maker)?
         ))
     }
 
@@ -903,12 +931,15 @@ impl Formatter {
             many = self.indent_str(&many);
         }
 
-        // If we're adding parens we will indent every line inside the parens
-        // by the standard indentation level. If not, we need indent every
-        // line _after the first_ with the width of the prefix on the first
-        // line.
         if add_parens {
             many.push_str("(\n");
+        }
+
+        // If we're adding parens we will indent every line inside the parens
+        // by the standard indentation level. The same applies if the prefix
+        // ends in a newline, If not, we need to indent every line _after the
+        // first_ with the width of the prefix on the first line.
+        if add_parens || prefix.ends_with("\n") {
             self.push_indent_one_level();
         } else {
             self.push_indent_from_str(&many);
@@ -918,8 +949,9 @@ impl Formatter {
         let last_idx = items.len() - 1;
         for (n, i) in items.iter().enumerate() {
             // If we added parens then every line must be indented the same
-            // way.
-            if add_parens || n != 0 {
+            // way. If the prefix ends with a newline (meaning its a
+            // multi-line string), then we should also indent the first line.
+            if add_parens || n != 0 || prefix.ends_with("\n") {
                 many.push_str(&" ".repeat(self.current_indent()));
             }
             many.push_str(i);

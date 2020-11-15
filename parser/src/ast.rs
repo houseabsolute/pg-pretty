@@ -3686,7 +3686,7 @@ pub struct SelectStmt {
     // NULL, list of DISTINCT ON exprs, or
     // lcons(NIL,NIL) for all (SELECT DISTINCT)
     #[serde(rename = "distinctClause")]
-    pub distinct_clause: Option<List>, // List*
+    pub distinct_clause: Option<Vec<Option<Node>>>, // List*
     // target for SELECT INTO
     #[serde(rename = "intoClause")]
     pub into_clause: Option<IntoClauseWrapper>, // IntoClause*

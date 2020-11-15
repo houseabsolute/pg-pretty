@@ -432,9 +432,10 @@ my %overrides = (
         stmt => 'Node',
     },
     SelectStmt => {
-        valuesLists => 'Option<Vec<List>>',
-        larg        => 'Option<Box<SelectStmtWrapper>>',
-        rarg        => 'Option<Box<SelectStmtWrapper>>',
+        distinctClause => 'Option<Vec<Option<Node>>>',
+        valuesLists    => 'Option<Vec<List>>',
+        larg           => 'Option<Box<SelectStmtWrapper>>',
+        rarg           => 'Option<Box<SelectStmtWrapper>>',
     },
     StringStruct => { str => 'String' },
 );

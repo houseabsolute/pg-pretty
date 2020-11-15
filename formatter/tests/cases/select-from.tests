@@ -153,3 +153,49 @@ FROM (
      ) AS sub2
          ON sub1.z = sub2.z
 ----
+
+++++
+DISTINCT 
+----
+SELECT DISTINCT location, time, report
+    FROM weather_reports
+    ORDER BY location, time DESC
+----
+SELECT DISTINCT location, time, report
+FROM weather_reports
+ORDER BY location, time DESC
+----
+
+++++
+DISTINCT ON
+----
+SELECT DISTINCT ON (location) location, time, report
+    FROM weather_reports
+    ORDER BY location, time DESC
+----
+SELECT DISTINCT ON (location) location, time, report
+FROM weather_reports
+ORDER BY location, time DESC
+----
+
+++++
+DISTINCT with very long ON
+----
+SELECT DISTINCT ON (very_long_column1, very_long_column2, very_long_column3, very_long_column4, very_long_column5, very_long_column6) location, time, report
+    FROM weather_reports
+    ORDER BY location, time DESC
+----
+SELECT DISTINCT ON (
+    very_long_column1,
+    very_long_column2,
+    very_long_column3,
+    very_long_column4,
+    very_long_column5,
+    very_long_column6
+)
+    location,
+    time,
+    report
+FROM weather_reports
+ORDER BY location, time DESC
+----
