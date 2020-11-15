@@ -79,7 +79,10 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
             return Err(anyhow!("Could not parse `{}` ({})", input, e));
         }
         Ok(p) => {
-            let got = &f.format_root_stmt(&p[0])?;
+            let got = &f
+                .format_root_stmt(&p[0])
+                .map_err(|e| anyhow!("{}\n{:#?}", e, &p[0]))?;
+
             if expect != got {
                 if env::var_os("PG_PRETTY_DEBUG_PARSE").is_some() {
                     println!("{:#?}", p);
