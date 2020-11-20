@@ -1148,6 +1148,7 @@ impl Formatter {
         self.push_indent(self.current_indent() + self.indent_width);
     }
 
+    #[cfg(test)]
     fn push_indent_by(&mut self, by: usize) {
         self.push_indent(self.current_indent() + by);
     }
