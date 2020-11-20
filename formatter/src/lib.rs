@@ -1,5 +1,6 @@
 use pg_pretty_parser::ast::*;
 use scopeguard::guard;
+use std::collections::HashMap;
 use thiserror::Error;
 //use trace::trace;
 
@@ -23,6 +24,10 @@ pub enum Error {
     CannotMixJoinStrategies { strat1: String, strat2: String },
     #[error("order by clause had a USING without an op")]
     OrderByUsingWithoutOp,
+    #[error("range function node does not have any functions")]
+    RangeFunctionDoesNotHaveAnyFunctions,
+    #[error("range function's list of func calls contains a non-FuncCall node")]
+    RangeFunctionHasNonFuncCallFunction,
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,6 +46,7 @@ pub struct Formatter {
     indent_width: usize,
     indents: Vec<usize>,
     contexts: Vec<ContextType>,
+    type_renaming: HashMap<String, String>,
 }
 
 type R = Result<String, Error>;
@@ -49,6 +55,9 @@ type R = Result<String, Error>;
 
 impl Formatter {
     pub fn new() -> Self {
+        let mut type_renaming: HashMap<String, String> = HashMap::new();
+        type_renaming.insert("int4".to_string(), "int".to_string());
+
         Formatter {
             a_expr_depth: 0,
             bool_expr_depth: 0,
@@ -56,6 +65,7 @@ impl Formatter {
             indent_width: 4,
             indents: vec![0],
             contexts: vec![],
+            type_renaming,
         }
     }
 
@@ -479,7 +489,7 @@ impl Formatter {
             .iter()
             .map(|n| match n {
                 // We don't want to quote a string here.
-                Node::StringStruct(s) => Ok(s.str.to_uppercase()),
+                Node::StringStruct(s) => Ok(s.str.clone()),
                 _ => self.format_node(&n),
             })
             .collect::<Result<Vec<_>, _>>()?
@@ -710,7 +720,8 @@ impl Formatter {
         match f {
             Node::JoinExpr(j) => self.format_join_expr(&j, is_first),
             Node::RangeVar(r) => Ok(self.format_range_var(&r)),
-            Node::RangeSubselect(sub) => self.format_subselect(&sub),
+            Node::RangeSubselect(s) => self.format_subselect(&s),
+            Node::RangeFunction(f) => self.format_range_function(&f),
             _ => Ok("from_element".to_string()),
         }
     }
@@ -988,7 +999,9 @@ impl Formatter {
                 .iter()
                 // Is this clone necessary? It feels like there should be a
                 // way to work with the original reference until the join.
-                .map(|StringStructWrapper::StringStruct(n)| n.str.clone())
+                .map(|StringStructWrapper::StringStruct(n)| {
+                    self.type_renaming.get(&n.str).unwrap_or(&n.str).clone()
+                })
                 .filter(|n| n != "pg_catalog")
                 .collect::<Vec<String>>()
                 .join(".")),
@@ -1017,6 +1030,82 @@ impl Formatter {
         }
 
         Ok(s)
+    }
+
+    //#[trace]
+    fn format_range_function(&mut self, range_func: &RangeFunction) -> R {
+        let funcs = &range_func.functions;
+        if funcs.len() == 0 {
+            return Err(Error::RangeFunctionDoesNotHaveAnyFunctions);
+        }
+
+        let (prefix, add_parens) = if funcs.len() > 1 {
+            ("ROWS FROM ".to_string(), true)
+        } else {
+            let p = if range_func.is_rowsfrom {
+                "ROWS FROM ".to_string()
+            } else {
+                String::new()
+            };
+            (p, false)
+        };
+
+        let maker = |f: &mut Self| {
+            funcs
+                .iter()
+                .map(|elt| match &elt.0 {
+                    Node::FuncCall(c) => {
+                        let mut c = f.format_func_call(&c)?;
+                        if let Some(defs) = &elt.1 {
+                            c.push_str(" AS ");
+                            c.push_str(&f.format_column_def_list(defs)?);
+                        }
+                        Ok(c)
+                    }
+                    _ => Err(Error::RangeFunctionHasNonFuncCallFunction),
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
+
+        let mut formatted = self.one_line_or_many(&prefix, false, add_parens, maker)?;
+        if range_func.alias.is_some() || range_func.coldeflist.is_some() {
+            formatted.push_str(" AS ");
+        }
+
+        if let Some(AliasWrapper::Alias(a)) = &range_func.alias {
+            formatted.push_str(&a.aliasname);
+        }
+
+        if let Some(defs) = &range_func.coldeflist {
+            if range_func.alias.is_some() {
+                formatted.push(' ');
+            }
+            formatted.push_str(&self.format_column_def_list(&defs)?);
+        }
+
+        Ok(formatted)
+    }
+
+    fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper]) -> R {
+        let maker = |f: &mut Self| {
+            defs.iter()
+                .map(|d| {
+                    let ColumnDefWrapper::ColumnDef(d) = d;
+                    f.format_column_def(d)
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
+
+        self.one_line_or_many("", false, true, maker)
+    }
+
+    fn format_column_def(&mut self, def: &ColumnDef) -> R {
+        // XXX - is there any way to steal this string instead? That'd require
+        // passing the ColumnDef as a non-ref, I believe.
+        let mut d = def.colname.clone();
+        d.push(' ');
+        d.push_str(&self.format_type_name(&def.type_name)?);
+        Ok(d)
     }
 
     //#[trace(disable(items_maker))]

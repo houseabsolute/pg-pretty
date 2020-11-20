@@ -208,3 +208,48 @@ SELECT DISTINCT ON (
 FROM weather_reports
 ORDER BY location, time DESC
 ----
+
+++++
+SELECT FROM func AS (cols)
+----
+SELECT * FROM distributors_2(111) AS (f1 int, f2 text)
+----
+SELECT *
+FROM distributors_2(111) AS ( f1 int, f2 text )
+----
+
+++++
+SELECT FROM multiple ( func AS (cols) )
+----
+SELECT * FROM ROWS FROM ( distributors_2(111) AS ( f1 int, f2 text ), distributors_3(111) AS ( f1 int, f2 text ) )
+----
+SELECT *
+FROM ROWS FROM (
+         distributors_2(111) AS ( f1 int, f2 text ),
+         distributors_3(111) AS ( f1 int, f2 text )
+     )
+----
+
+++++
+SELECT FROM multiple ( func AS (cols) ) AS name
+----
+SELECT * FROM ROWS FROM ( distributors_2(111) AS ( f1 int, f2 text ), distributors_3(111) AS ( f1 int, f2 text ) ) AS d
+----
+SELECT *
+FROM ROWS FROM (
+         distributors_2(111) AS ( f1 int, f2 text ),
+         distributors_3(111) AS ( f1 int, f2 text )
+     ) AS d
+----
+
+++++
+SELECT FROM multiple ( func AS (cols) ) AS name (cols)
+----
+SELECT * FROM ROWS FROM ( distributors_2(111) AS ( f1 int, f2 text ), distributors_3(111) AS ( f1 int, f2 text ) ) AS d (d1 int, d2 text)
+----
+SELECT *
+FROM ROWS FROM (
+         distributors_2(111) AS ( f1 int, f2 text ),
+         distributors_3(111) AS ( f1 int, f2 text )
+     ) AS d ( d1 int, d2 text )
+----

@@ -3,7 +3,7 @@ simple
 ----
 SELECT x, MAX(y) FROM t1 GROUP BY x
 ----
-SELECT x, MAX(y)
+SELECT x, max(y)
 FROM t1
 GROUP BY x
 ----
@@ -13,7 +13,7 @@ group by 1
 ----
 SELECT x, y, MAX(z) FROM t1 GROUP BY 2,1
 ----
-SELECT x, y, MAX(z)
+SELECT x, y, max(z)
 FROM t1
 GROUP BY 2, 1
 ----
@@ -23,7 +23,7 @@ grouping sets
 ----
 SELECT brand, size, sum(sales) FROM items_sold GROUP BY GROUPING SETS ((brand), (size), ())
 ----
-SELECT brand, size, SUM(sales)
+SELECT brand, size, sum(sales)
 FROM items_sold
 GROUP BY GROUPING SETS ( (brand), (size), () )
 ----
@@ -33,7 +33,7 @@ grouping sets
 ----
 SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY GROUPING SETS ((brand, color), (size), ())
 ----
-SELECT brand, color, size, SUM(sales)
+SELECT brand, color, size, sum(sales)
 FROM items_sold
 GROUP BY GROUPING SETS ( ( brand, color ), (size), () )
 ----
@@ -43,7 +43,7 @@ rollup
 ----
 SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY ROLLUP (brand, color, size)
 ----
-SELECT brand, color, size, SUM(sales)
+SELECT brand, color, size, sum(sales)
 FROM items_sold
 GROUP BY ROLLUP ( brand, color, size )
 ----
@@ -53,7 +53,7 @@ rollup
 ----
 SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY ROLLUP ((brand, color), size)
 ----
-SELECT brand, color, size, SUM(sales)
+SELECT brand, color, size, sum(sales)
 FROM items_sold
 GROUP BY ROLLUP ( ( brand, color ), size )
 ----
@@ -63,7 +63,7 @@ cube
 ----
 SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY CUBE (brand, color, size)
 ----
-SELECT brand, color, size, SUM(sales)
+SELECT brand, color, size, sum(sales)
 FROM items_sold
 GROUP BY CUBE ( brand, color, size )
 ----
@@ -73,7 +73,7 @@ cube
 ----
 SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY CUBE ((brand, color), size)
 ----
-SELECT brand, color, size, SUM(sales)
+SELECT brand, color, size, sum(sales)
 FROM items_sold
 GROUP BY CUBE ( ( brand, color ), size )
 ----
@@ -83,7 +83,7 @@ complex sets
 ----
 SELECT brand, color, size, sum(sales) FROM items_sold GROUP BY a, CUBE (b, c), GROUPING SETS ((d), (e))
 ----
-SELECT brand, color, size, SUM(sales)
+SELECT brand, color, size, sum(sales)
 FROM items_sold
 GROUP BY a, CUBE ( b, c ), GROUPING SETS ( (d), (e) )
 ----

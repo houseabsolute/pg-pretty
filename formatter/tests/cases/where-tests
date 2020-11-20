@@ -46,7 +46,7 @@ WHERE (
       )
       OR name = 'Lisa'
       OR (
-          date = NOW()
+          date = now()
           OR status = 'dead'
       )
 ----
@@ -202,7 +202,7 @@ FROM y
 WHERE ( name, size ) = (
           SELECT name, size
           FROM z
-          WHERE added < NOW()
+          WHERE added < now()
       )
 ----
 

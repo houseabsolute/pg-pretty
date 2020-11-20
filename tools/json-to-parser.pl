@@ -428,6 +428,7 @@ my %overrides = (
     Float          => { str        => 'String' },
     Integer        => { ival       => 'i64' },
     LockingClause  => { lockedRels => 'Option<Vec<RangeVarWrapper>>' },
+    RangeFunction  => { functions  => 'Vec<RangeFunctionElement>' },
     RangeSubselect => { subquery   => 'Box<SelectStmtWrapper>' },
     RawStmt        => {
         stmt => 'Node',
@@ -463,6 +464,10 @@ my %not_optional = (
     BoolExpr                   => {
         boolop => 1,
         args   => 1,
+    },
+    ColumnDef => {
+        colname   => 1,
+        typeName => 1,
     },
     CompositeTypeStmt => { coldeflist => 1 },
     CopyStmt          => { options    => 1 },
