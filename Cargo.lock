@@ -578,7 +578,6 @@ dependencies = [
  "serde_repr",
  "serde_with",
  "spectral",
- "strum",
  "strum_macros",
  "thiserror",
 ]
@@ -884,12 +883,6 @@ dependencies = [
  "quote 0.6.13",
  "syn 0.15.44",
 ]
-
-[[package]]
-name = "strum"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57bd81eb48f4c437cadc685403cad539345bf703d78e63707418431cecd4522b"
 
 [[package]]
 name = "strum_macros"
