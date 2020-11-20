@@ -1,6 +1,6 @@
 use eyre::Result;
 use pg_pretty_formatter::Formatter;
-use pg_pretty_parser::{parser, ast::Root};
+use pg_pretty_parser::{ast::Root, parser};
 
 fn main() -> Result<()> {
     let sql = r#"
