@@ -110,7 +110,7 @@ impl Formatter {
 
     //#[trace]
     fn format_select_stmt(&mut self, s: &SelectStmt) -> R {
-        if let Some( mut op) = self.match_op(&s.op) {
+        if let Some(mut op) = self.match_op(&s.op) {
             // XXX - this is so gross. I think the unstable box matching
             // syntax would make this much less gross.
             let left = match &s.larg {
@@ -193,7 +193,7 @@ impl Formatter {
                 // All of the elements should be Some(...).
                 let maker = |f: &mut Self| {
                     distinct
-                        .into_iter()
+                        .iter()
                         .map(|c| match c {
                             Some(c) => f.format_node(c),
                             None => panic!("multi-element distinct clause contains a null!"),
@@ -201,15 +201,15 @@ impl Formatter {
                         .collect::<Result<Vec<_>, _>>()
                 };
                 prefix = self.one_line_or_many(&prefix, false, true, maker)?;
-                if prefix.contains("\n") {
-                    prefix.push_str("\n");
+                if prefix.contains('\n') {
+                    prefix.push('\n');
                 } else {
-                    prefix.push_str(" ");
+                    prefix.push(' ');
                 }
             }
         }
 
-        let mut can_be_one_line = !prefix.contains("\n");
+        let mut can_be_one_line = !prefix.contains('\n');
         if can_be_one_line {
             for t in tl {
                 if self.is_complex_target_element(t)? {
@@ -220,7 +220,7 @@ impl Formatter {
         }
 
         let maker = |f: &mut Self| {
-            tl.into_iter()
+            tl.iter()
                 .map(|t| f.format_target_element(t))
                 .collect::<Result<Vec<_>, _>>()
         };
@@ -280,7 +280,7 @@ impl Formatter {
         wh.push_str(&self.format_node(w)?);
         self.pop_indent();
 
-        wh.push_str("\n");
+        wh.push('\n');
 
         Ok(wh)
     }
@@ -321,10 +321,12 @@ impl Formatter {
         let op = match &a.kind {
             AExprKind::AExprParen => panic!("no idea how to handle AExprParen kind of AExpr"),
             _ => {
-                let o = a.name.as_ref().expect(&format!(
-                    "must have a name defined for a {} kind of AExpr",
-                    a.kind
-                ));
+                let o = a.name.as_ref().unwrap_or_else(|| {
+                    panic!(format!(
+                        "must have a name defined for a {} kind of AExpr",
+                        a.kind
+                    ))
+                });
                 formatter.formatted_list(o)?.join(" ")
             }
         };
@@ -339,7 +341,7 @@ impl Formatter {
             AExprKind::AExprOf => format!("IS {}OF", formatter.maybe_not(&op)),
             AExprKind::AExprIn => format!("{}IN", formatter.maybe_not(&op)),
             // For all the rest we can use the op as is.
-            _ => op.to_string(),
+            _ => op,
         };
 
         formatter.format_infix_expr(&a.lexpr, real_op, &a.rexpr)
@@ -426,22 +428,22 @@ impl Formatter {
         } else {
             expr.push_str(&self.indent_str(&args.remove(0)));
         }
-        expr.push_str("\n");
+        expr.push('\n');
 
         let last = args.len();
         for (n, f) in args.iter().enumerate() {
             expr.push_str(&self.indent_str(&op));
-            expr.push_str(" ");
+            expr.push(' ');
             expr.push_str(&f);
             if n < last - 1 {
-                expr.push_str("\n");
+                expr.push('\n');
             }
         }
 
         // If we're closing out a nested boolean, we want to ...
         if self.bool_expr_depth > 1 {
             // add a newline
-            expr.push_str("\n");
+            expr.push('\n');
             // outdent one level
             self.pop_indent();
             // add our closing delimiter
@@ -477,12 +479,12 @@ impl Formatter {
             .iter()
             .map(|n| match n {
                 // We don't want to quote a string here.
-                Node::StringStruct(s) => Ok(s.str.to_uppercase().to_owned()),
+                Node::StringStruct(s) => Ok(s.str.to_uppercase()),
                 _ => self.format_node(&n),
             })
             .collect::<Result<Vec<_>, _>>()?
             .join(" ");
-        func.push_str("(");
+        func.push('(');
 
         let mut arg_is_simple = true;
         let mut args = String::new();
@@ -493,7 +495,7 @@ impl Formatter {
 
         // We'll ignore f.func_variadic since it's optional.
         if f.agg_star {
-            args.push_str("*");
+            args.push('*');
         }
 
         match &f.args {
@@ -527,14 +529,14 @@ impl Formatter {
         // XXX need to handle f.agg_within_group
 
         if !arg_is_simple {
-            func.push_str(" ");
+            func.push(' ');
             func.push_str(&args);
-            func.push_str(" ");
+            func.push(' ');
         } else {
             func.push_str(&args);
         }
 
-        func.push_str(")");
+        func.push(')');
 
         Ok(func)
     }
@@ -673,12 +675,8 @@ impl Formatter {
                 .map(|g| {
                     // If the element is a RowExpr it will already have
                     // wrapping parens.
-                    if needs_parens {
-                        if g.starts_with("(") && g.ends_with(")") {
-                            g
-                        } else {
-                            format!("({})", g)
-                        }
+                    if needs_parens && !(g.starts_with('(') && g.ends_with(')')) {
+                        format!("({})", g)
                     } else {
                         g
                     }
@@ -702,7 +700,7 @@ impl Formatter {
         }
         self.pop_indent();
 
-        from.push_str("\n");
+        from.push('\n');
 
         Ok(from)
     }
@@ -749,17 +747,17 @@ impl Formatter {
         if j.is_natural {
             e.push_str("NATURAL");
         }
-        e.push_str("\n");
+        e.push('\n');
         e.push_str(&" ".repeat(self.current_indent()));
         e.push_str(self.join_type(&j.jointype)?);
-        e.push_str(" ");
+        e.push(' ');
         e.push_str(&self.format_from_element(&j.rarg, is_first)?);
 
         if let Some(q) = &j.quals {
             // For now, we'll just always put a newline before the "ON ..."
             // clause. This simplifies the formatting and makes it consistent
             // with how we format WHERE clauses.
-            e.push_str("\n");
+            e.push('\n');
             self.push_indent_one_level();
             e.push_str(&self.indent_str("ON "));
             e.push_str(&self.format_node(q)?);
@@ -769,12 +767,12 @@ impl Formatter {
             let using = format!("USING {}", self.format_using_clause(u));
             // + 1 for space before "USING"
             if self.len_after_nl(&e) + using.len() + 1 > self.max_line_length {
-                e.push_str("\n");
+                e.push('\n');
                 self.push_indent_one_level();
                 e.push_str(&self.indent_str(&using));
                 self.pop_indent();
             } else {
-                e.push_str(" ");
+                e.push(' ');
                 e.push_str(&using);
             }
         }
@@ -796,7 +794,7 @@ impl Formatter {
     fn format_using_clause(&self, using: &[StringStructWrapper]) -> String {
         let mut c = "(".to_string();
         if using.len() > 1 {
-            c.push_str(" ");
+            c.push(' ');
         }
         c.push_str(
             using
@@ -807,9 +805,9 @@ impl Formatter {
                 .as_str(),
         );
         if using.len() > 1 {
-            c.push_str(" ");
+            c.push(' ');
         }
-        c.push_str(")");
+        c.push(')');
         c
     }
 
@@ -854,7 +852,7 @@ impl Formatter {
         h.push_str(&self.format_node(having)?);
         self.pop_indent();
 
-        h.push_str("\n");
+        h.push('\n');
 
         Ok(h)
     }
@@ -875,7 +873,7 @@ impl Formatter {
             let mut rels: Vec<String> = vec![];
             if let Some(lr) = &c.locked_rels {
                 rels = lr
-                    .into_iter()
+                    .iter()
                     .map(|RangeVarWrapper::RangeVar(r)| self.format_range_var(r))
                     .collect();
             }
@@ -895,7 +893,7 @@ impl Formatter {
                 one_line.push_str(&rels.join(", "));
             }
             if !wait.is_empty() {
-                one_line.push_str(" ");
+                one_line.push(' ');
                 one_line.push_str(wait);
             }
             if self.fits_on_one_line(&one_line) {
@@ -915,9 +913,9 @@ impl Formatter {
                     }
                     many.push_str(r);
                     if n != rels.len() - 1 {
-                        many.push_str(",");
+                        many.push(',');
                     }
-                    many.push_str("\n");
+                    many.push('\n');
                 }
             }
             if !wait.is_empty() {
@@ -1012,7 +1010,7 @@ impl Formatter {
             .to_string();
         s.push_str(formatted);
 
-        s.push_str("\n");
+        s.push('\n');
         s.push_str(&self.indent_str(")"));
         if let Some(AliasWrapper::Alias(a)) = &sub.alias {
             s.push_str(&Self::alias_name(&a.aliasname));
@@ -1054,7 +1052,7 @@ impl Formatter {
         one_line.push_str(&items.join(", "));
         one_line.push_str(parens[1]);
 
-        if !one_line.contains("\n") && self.fits_on_one_line(&one_line) {
+        if !one_line.contains('\n') && self.fits_on_one_line(&one_line) {
             return Ok(one_line);
         }
 
@@ -1085,7 +1083,7 @@ impl Formatter {
         // by the standard indentation level. The same applies if the prefix
         // ends in a newline, If not, we need to indent every line _after the
         // first_ with the width of the prefix on the first line.
-        if add_parens || prefix.ends_with("\n") {
+        if add_parens || prefix.ends_with('\n') {
             self.push_indent_one_level();
         } else {
             self.push_indent_from_str(&many);
@@ -1097,20 +1095,20 @@ impl Formatter {
             // If we added parens then every line must be indented the same
             // way. If the prefix ends with a newline (meaning its a
             // multi-line string), then we should also indent the first line.
-            if add_parens || n != 0 || prefix.ends_with("\n") {
+            if add_parens || n != 0 || prefix.ends_with('\n') {
                 many.push_str(&" ".repeat(self.current_indent()));
             }
             many.push_str(i);
             if n < last_idx {
-                many.push_str(",");
-                many.push_str("\n");
+                many.push(',');
+                many.push('\n');
             }
         }
 
         self.pop_indent();
 
         if add_parens {
-            many.push_str("\n");
+            many.push('\n');
             many.push_str(&self.indent_str(")"));
         }
 
@@ -1118,7 +1116,7 @@ impl Formatter {
     }
 
     fn fits_on_one_line(&self, line: &str) -> bool {
-        if line.contains("\n") {
+        if line.contains('\n') {
             return false;
         }
         self.current_indent() + line.len() <= self.max_line_length
@@ -1128,7 +1126,7 @@ impl Formatter {
         self.contexts.contains(&t)
     }
 
-    fn joined_list(&mut self, v: &List, joiner: &str) -> R {
+    fn joined_list(&mut self, v: &[Node], joiner: &str) -> R {
         Ok(self.formatted_list(v)?.join(joiner))
     }
 

@@ -1,3 +1,4 @@
+#![allow(clippy::large_enum_variant)]
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use serde_with::skip_serializing_none;
