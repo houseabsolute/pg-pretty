@@ -1035,7 +1035,7 @@ impl Formatter {
     //#[trace]
     fn format_range_function(&mut self, range_func: &RangeFunction) -> R {
         let funcs = &range_func.functions;
-        if funcs.len() == 0 {
+        if funcs.is_empty() {
             return Err(Error::RangeFunctionDoesNotHaveAnyFunctions);
         }
 
