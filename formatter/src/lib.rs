@@ -1391,7 +1391,7 @@ mod tests {
                     ON,
                     "table1.foo" = "table2.foo",
                 ),
-                "table1\nJOIN table2 ON table1.foo = table2.foo",
+                "table1\nJOIN table2\n    ON table1.foo = table2.foo",
             ),
             case!(
                 "inner join ON with indent",
@@ -1402,7 +1402,7 @@ mod tests {
                     ON,
                     "table1.foo" = "table2.foo",
                 ),
-                "    table1\n    JOIN table2 ON table1.foo = table2.foo",
+                "    table1\n    JOIN table2\n        ON table1.foo = table2.foo",
                 4,
             ),
             case!(
@@ -1414,7 +1414,7 @@ mod tests {
                     ON,
                     "table1.foo" = "table2.foo",
                 ),
-                "table1\nLEFT OUTER JOIN table2 ON table1.foo = table2.foo",
+                "table1\nLEFT OUTER JOIN table2\n    ON table1.foo = table2.foo",
             ),
             case!(
                 "right outer join ON",
@@ -1425,7 +1425,7 @@ mod tests {
                     ON,
                     "table1.foo" = "table2.foo",
                 ),
-                "table1\nRIGHT OUTER JOIN table2 ON table1.foo = table2.foo",
+                "table1\nRIGHT OUTER JOIN table2\n    ON table1.foo = table2.foo",
             ),
             case!(
                 "inner join USING",
