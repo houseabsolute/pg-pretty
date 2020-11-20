@@ -54,6 +54,7 @@ type R = Result<String, Error>;
 //trace::init_depth_var!();
 
 impl Formatter {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let mut type_renaming: HashMap<String, String> = HashMap::new();
         type_renaming.insert("int4".to_string(), "int".to_string());
