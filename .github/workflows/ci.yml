@@ -20,9 +20,10 @@ jobs:
           - os_name: macOS
             os: macOS-latest
             target: x86_64-apple-darwin
-          - os_name: Windows
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
+          # This needs libclang, which I will figure out later.
+          # - os_name: Windows
+          #   os: windows-latest
+          #   target: x86_64-pc-windows-msvc
         toolchain:
           - stable
           - beta
@@ -71,11 +72,12 @@ jobs:
             target: x86_64-unknown-linux-gnu
             bin: precious
             name: precious-Linux-x86_64.tar.gz
-          - os_name: Windows
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bin: precious.exe
-            name: precious-Windows-x86_64.zip
+          # This needs libclang, which I will figure out later.
+          # - os_name: Windows
+          #   os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   bin: precious.exe
+          #   name: precious-Windows-x86_64.zip
           - os_name: macOS
             os: macOS-latest
             target: x86_64-apple-darwin
