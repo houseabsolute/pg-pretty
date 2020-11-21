@@ -35,6 +35,7 @@ enum ContextType {
     AExpr,
     GroupingSet,
     OrderByUsingClause,
+    RangeTableSample,
     SubLink,
 }
 
@@ -85,16 +86,17 @@ impl Formatter {
     //#[trace]
     fn format_node(&mut self, node: &Node) -> R {
         match &node {
-            Node::SelectStmt(s) => self.format_select_stmt(&s),
-            Node::ColumnRef(c) => self.format_column_ref(&c),
             Node::AConst(a) => self.format_a_const(&a),
             Node::AExpr(a) => self.format_a_expr(&a),
             Node::BoolExpr(b) => self.format_bool_expr(&b),
+            Node::ColumnRef(c) => self.format_column_ref(&c),
             Node::FuncCall(f) => self.format_func_call(&f),
+            Node::GroupingSet(g) => self.format_grouping_set(&g),
+            Node::RangeVar(r) => Ok(self.format_range_var(&r)),
+            Node::RowExpr(r) => self.format_row_expr(&r),
+            Node::SelectStmt(s) => self.format_select_stmt(&s),
             Node::StringStruct(s) => Ok(self.format_string(&s.str)),
             Node::SubLink(s) => self.format_sub_link(&s),
-            Node::RowExpr(r) => self.format_row_expr(&r),
-            Node::GroupingSet(g) => self.format_grouping_set(&g),
             Node::TypeCast(t) => self.format_type_cast(&t),
             _ => Err(Error::UnexpectedNode {
                 node: node.to_string(),
@@ -110,9 +112,10 @@ impl Formatter {
         // works in practice though ...
         match self.contexts.last() {
             Some(c) => match c {
-                ContextType::AExpr => s.to_string(),
-                ContextType::OrderByUsingClause => s.to_string(),
-                ContextType::SubLink => s.to_string(),
+                ContextType::AExpr
+                | ContextType::OrderByUsingClause
+                | ContextType::RangeTableSample
+                | ContextType::SubLink => s.to_string(),
                 _ => self.quote_string(&s),
             },
             None => self.quote_string(&s),
@@ -727,6 +730,7 @@ impl Formatter {
             Node::RangeVar(r) => Ok(self.format_range_var(&r)),
             Node::RangeSubselect(s) => self.format_subselect(&s),
             Node::RangeFunction(f) => self.format_range_function(&f),
+            Node::RangeTableSample(s) => self.format_range_table_sample(&s),
             _ => Ok("from_element".to_string()),
         }
     }
@@ -760,11 +764,11 @@ impl Formatter {
         }
 
         e.push_str(&self.format_from_element(&j.larg, is_first)?);
-        if j.is_natural {
-            e.push_str("NATURAL");
-        }
         e.push('\n');
         e.push_str(&" ".repeat(self.current_indent()));
+        if j.is_natural {
+            e.push_str("NATURAL ");
+        }
         e.push_str(self.join_type(&j.jointype)?);
         e.push(' ');
         e.push_str(&self.format_from_element(&j.rarg, is_first)?);
@@ -1107,6 +1111,25 @@ impl Formatter {
         }
 
         Ok(formatted)
+    }
+
+    fn format_range_table_sample(&mut self, sample: &RangeTableSample) -> R {
+        self.contexts.push(ContextType::RangeTableSample);
+
+        let mut s = self.format_node(&sample.relation)?;
+        s.push_str(" TABLESAMPLE ");
+        s.push_str(&self.joined_list(&sample.method, ".")?);
+        s.push('(');
+        s.push_str(&self.joined_list(&sample.args, ", ")?);
+        s.push(')');
+
+        if let Some(r) = &sample.repeatable {
+            s.push_str(" REPEATABLE (");
+            s.push_str(&self.format_node(&*r)?);
+            s.push(')');
+        }
+
+        Ok(s)
     }
 
     fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper], last_line_len: usize) -> R {

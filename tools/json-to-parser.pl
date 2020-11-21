@@ -444,78 +444,109 @@ my %overrides = (
 );
 
 my %not_optional = (
-    AConst => { val => 1 },
-    AExpr  => {
-        lexpr => 1,
-        rexpr => 1,
-    },
-    Alias                      => { aliasname    => 1 },
-    AlterDatabaseStmt          => { options      => 1 },
-    AlterDefaultPrivilegesStmt => { options      => 1 },
-    AlterDomainStmt            => { typeName     => 1 },
-    AlterEnumStmt              => { typeName     => 1 },
-    AlterExtensionStmt         => { options      => 1 },
-    AlterFunctionStmt          => { options      => 1 },
-    AlterOperatorStmt          => { options      => 1 },
-    AlterOpFamilyStmt          => { opfamilyname => 1 },
-    AlterRoleStmt              => { options      => 1 },
-    AlterSubScriptionStmt      => { options      => 1 },
-    BitString                  => { str          => 1 },
-    BoolExpr                   => {
-        boolop => 1,
-        args   => 1,
-    },
-    ColumnDef => {
-        colname   => 1,
-        typeName => 1,
-    },
-    CompositeTypeStmt => { coldeflist => 1 },
-    CopyStmt          => { options    => 1 },
-    CreateDomainStmt  => {
-        domainname  => 1,
-        constraints => 1,
-    },
-    CreateEnumStmt => {
-        typeName => 1,
-        vals     => 1,
-    },
-    CreateExtensionStmt => { options => 1 },
-    CreateFunctionStmt  => {
-        funcname   => 1,
-        options    => 1,
-        returnType => 1,
-    },
-    FuncCall          => { funcname => 1 },
-    FunctionParameter => { argType  => 1 },
-    JoinExpr          => {
-        jointype => 1,
-        larg     => 1,
-        rarg     => 1,
-    },
-    LockingClause  => { strength => 1 },
-    RangeSubselect => { subquery => 1 },
-    RangeVar       => { relname  => 1 },
-    ResTarget      => { val      => 1 },
-    RowExpr        => {
-        args       => 1,
-        row_format => 1,
-    },
-    SortBy => {
-        node         => 1,
-        sortby_dir   => 1,
-        sortby_nulls => 1,
-    },
-    SubLink => {
-        subLinkType => 1,
-        subselect   => 1,
-    },
-    TypeCast => {
-        arg      => 1,
-        typeName => 1
-    },
-    TypeName => { names => 1 },
-    Value    => { val   => 1 },
+    AConst => [qw( val )],
+    AExpr  => [
+        qw(
+            lexpr
+            rexpr
+            )
+    ],
+    Alias                      => [qw( aliasname )],
+    AlterDatabaseStmt          => [qw( options )],
+    AlterDefaultPrivilegesStmt => [qw( options )],
+    AlterDomainStmt            => [qw( typeName )],
+    AlterEnumStmt              => [qw( typeName )],
+    AlterExtensionStmt         => [qw( options )],
+    AlterFunctionStmt          => [qw( options )],
+    AlterOperatorStmt          => [qw( options )],
+    AlterOpFamilyStmt          => [qw( opfamilyname )],
+    AlterRoleStmt              => [qw( options )],
+    AlterSubScriptionStmt      => [qw( options )],
+    BitString                  => [qw( str )],
+    BoolExpr                   => [
+        qw(
+            boolop
+            args
+            )
+    ],
+    ColumnDef => [
+        qw(
+            colname
+            typeName
+            )
+    ],
+    CompositeTypeStmt => [qw( coldeflist )],
+    CopyStmt          => [qw( options )],
+    CreateDomainStmt  => [
+        qw(
+            domainname
+            constraints
+            )
+    ],
+    CreateEnumStmt => [
+        qw(
+            typeName
+            vals
+            )
+    ],
+    CreateExtensionStmt => [qw( options )],
+    CreateFunctionStmt  => [
+        qw(
+            funcname
+            options
+            returnType
+            )
+    ],
+    FuncCall          => [qw( funcname )],
+    FunctionParameter => [qw( argType )],
+    JoinExpr          => [
+        qw(
+            jointype
+            larg
+            rarg
+            )
+    ],
+    LockingClause    => [qw( strength )],
+    RangeSubselect   => [qw( subquery )],
+    RangeTableSample => [
+        qw(
+            relation
+            method
+            args
+            )
+    ],
+    RangeVar  => [qw( relname )],
+    ResTarget => [qw( val )],
+    RowExpr   => [
+        qw(
+            args
+            row_format
+            )
+    ],
+    SortBy => [
+        qw(
+            node
+            sortby_dir
+            sortby_nulls
+            )
+    ],
+    SubLink => [
+        qw(
+            subLinkType
+            subselect
+            )
+    ],
+    TypeCast => [
+        qw(
+            arg
+            typeName
+            )
+    ],
+    TypeName => [qw( names )],
+    Value    => [qw( val )],
 );
+$not_optional{$_} = { map { $_ => 1 } $not_optional{$_}->@* }
+    for keys %not_optional;
 
 # This makes nearly everything an Option<...>, which is almost surely
 # wrong. But it's not possible to figure out what's supposed to be optional

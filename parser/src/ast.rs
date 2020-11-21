@@ -3151,11 +3151,11 @@ pub struct RangeTableFuncCol {
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct RangeTableSample {
     // relation to be sampled
-    pub relation: Option<Box<Node>>, // Node*
+    pub relation: Box<Node>, // Node*
     // sampling method name (possibly qualified)
-    pub method: Option<List>, // List*
+    pub method: List, // List*
     // argument(s) for sampling method
-    pub args: Option<List>, // List*
+    pub args: List, // List*
     // REPEATABLE expression, or NULL if none
     pub repeatable: Option<Box<Node>>, // Node*
     // method name location, or -1 if unknown

@@ -17,13 +17,23 @@ FROM y
 ----
 
 ++++
-SELECT * FROM x, y
+comma-separated from list
 ----
 SELECT * FROM x, y
 ----
 SELECT *
 FROM x,
      y
+----
+
+++++
+natural join
+----
+SELECT * FROM x NATURAL JOIN y
+----
+SELECT *
+FROM x
+     NATURAL JOIN y
 ----
 
 ++++
@@ -321,4 +331,35 @@ SELECT m.name AS mname, pname
 FROM manufacturers AS m
      LEFT OUTER JOIN LATERAL get_product_names(m.id) AS pname
          ON TRUE
+----
+
+
+++++
+tablesample BERNOULLI
+----
+SELECT id FROM x TABLESAMPLE BERNOULLI(42) JOIN y USING (x)
+----
+SELECT id
+FROM x TABLESAMPLE bernoulli(42)
+     JOIN y USING (x)
+----
+
+++++
+tablesample SYSTEM
+----
+SELECT id FROM x TABLESAMPLE SYSTEM(42) JOIN y USING (x)
+----
+SELECT id
+FROM x TABLESAMPLE system(42)
+     JOIN y USING (x)
+----
+
+++++
+tablesample REPEATABLE 1
+----
+SELECT id FROM x TABLESAMPLE SYSTEM(42) REPEATABLE (1) JOIN y USING (x)
+----
+SELECT id
+FROM x TABLESAMPLE system(42) REPEATABLE (1)
+     JOIN y USING (x)
 ----
