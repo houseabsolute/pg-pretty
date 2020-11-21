@@ -707,6 +707,10 @@ impl Formatter {
         // indent before that string.
         self.push_indent_from_str(start);
         for (n, f) in fc.iter().enumerate() {
+            if n > 0 {
+                from.push_str(",\n");
+                from.push_str(&" ".repeat(self.current_indent()));
+            }
             from.push_str(&self.format_from_element(&f, n == 0)?);
         }
         self.pop_indent();
@@ -989,6 +993,14 @@ impl Formatter {
         cast.push_str("::");
         cast.push_str(&self.format_type_name(&type_cast.type_name)?);
 
+        // This is some oddity of the parser. It turns TRUE and FALSE literals
+        // into this cast expression.
+        if cast == "'t'::bool" {
+            return Ok("TRUE".to_string());
+        } else if cast == "'f'::bool" {
+            return Ok("FALSE".to_string());
+        }
+
         Ok(cast)
     }
 
@@ -1011,7 +1023,12 @@ impl Formatter {
 
     //#[trace]
     fn format_subselect(&mut self, sub: &RangeSubselect) -> R {
-        let mut s = "(\n".to_string();
+        let mut s = if sub.lateral {
+            "LATERAL ".to_string()
+        } else {
+            String::new()
+        };
+        s.push_str("(\n");
 
         let SelectStmtWrapper::SelectStmt(stmt) = &*sub.subquery;
         let mut subformatter = self.new_subformatter();
@@ -1040,16 +1057,19 @@ impl Formatter {
             return Err(Error::RangeFunctionDoesNotHaveAnyFunctions);
         }
 
-        let (prefix, add_parens) = if funcs.len() > 1 {
-            ("ROWS FROM ".to_string(), true)
+        let mut prefix = if range_func.lateral {
+            "LATERAL ".to_string()
         } else {
-            let p = if range_func.is_rowsfrom {
-                "ROWS FROM ".to_string()
-            } else {
-                String::new()
-            };
-            (p, false)
+            String::new()
         };
+
+        let mut add_parens = false;
+        if funcs.len() > 1 {
+            prefix.push_str("ROWS FROM ");
+            add_parens = true;
+        } else if range_func.is_rowsfrom {
+            prefix.push_str("ROWS FROM ");
+        }
 
         let maker = |f: &mut Self| {
             funcs

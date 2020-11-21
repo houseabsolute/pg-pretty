@@ -17,6 +17,16 @@ FROM y
 ----
 
 ++++
+SELECT * FROM x, y
+----
+SELECT * FROM x, y
+----
+SELECT *
+FROM x,
+     y
+----
+
+++++
 2 tables on
 ----
 SELECT x FROM y JOIN z ON y.foo = z.foo
@@ -129,6 +139,23 @@ FROM (
               JOIN t2 USING (x)
      ) AS sub
      JOIN t3
+         ON sub.foo = t3.foo
+----
+
+++++
+lateral subselect
+----
+SELECT a, b, c
+FROM  t3 JOIN LATERAL ( SELECT x, y, z FROM t1 JOIN t2 USING (x)) AS sub
+ON sub.foo = t3.foo
+----
+SELECT a, b, c
+FROM t3
+     JOIN LATERAL (
+         SELECT x, y, z
+         FROM t1
+              JOIN t2 USING (x)
+     ) AS sub
          ON sub.foo = t3.foo
 ----
 
@@ -271,4 +298,27 @@ FROM ROWS FROM (
          very_long_column_name_goes_here_and_keeps_going_and_going1 int,
          very_long_column_name_goes_here_and_keeps_going_and_going text
      )
+----
+
+++++
+lateral join func
+----
+SELECT m.name AS mname, pname
+FROM manufacturers m, LATERAL get_product_names(m.id) pname
+----
+SELECT m.name AS mname, pname
+FROM manufacturers AS m,
+     LATERAL get_product_names(m.id) AS pname
+----
+
+++++
+lateral left outer join func
+----
+SELECT m.name AS mname, pname
+FROM manufacturers m LEFT JOIN LATERAL get_product_names(m.id) pname ON true
+----
+SELECT m.name AS mname, pname
+FROM manufacturers AS m
+     LEFT OUTER JOIN LATERAL get_product_names(m.id) AS pname
+         ON TRUE
 ----
