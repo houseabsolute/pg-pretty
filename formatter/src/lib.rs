@@ -179,6 +179,7 @@ impl Formatter {
         if let Some(o) = &s.sort_clause {
             select.push_str(&self.format_order_by_clause(o)?);
         }
+        select.push_str(&self.maybe_format_limit(s)?);
         if let Some(l) = &s.locking_clause {
             select.push_str(&self.format_locking_clause(l)?);
         }
@@ -559,6 +560,32 @@ impl Formatter {
     //#[trace]
     fn format_window_def(&mut self, _w: &WindowDefWrapper) -> R {
         Ok("WINDOW".to_string())
+    }
+
+    fn maybe_format_limit(&mut self, s: &SelectStmt) -> R {
+        let mut limit = String::new();
+        if let Some(c) = &s.limit_count {
+            limit.push_str("LIMIT ");
+            match **c {
+                Node::AConst(AConst {
+                    val: Value::Null(_),
+                    ..
+                }) => limit.push_str("ALL"),
+                _ => limit.push_str(&self.format_node(&*c)?),
+            }
+        }
+        if let Some(o) = &s.limit_offset {
+            if !limit.is_empty() {
+                limit.push(' ');
+            }
+            limit.push_str("OFFSET ");
+            limit.push_str(&self.format_node(&*o)?);
+        }
+        if !limit.is_empty() {
+            limit.push('\n');
+        }
+
+        Ok(limit)
     }
 
     //#[trace]
