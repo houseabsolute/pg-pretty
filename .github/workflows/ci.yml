@@ -38,6 +38,10 @@ jobs:
             ~/.cargo/git
             target              
           key: cargo-${{ matrix.platform.os }}-${{ matrix.platform.target }}-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.lock') }}
+        # For some reason caching on macOS leads to failures finding crates,
+        # like
+        # https://github.com/houseabsolute/pg-pretty/actions/runs/376220214
+        if: matrix.platform.os != 'macOS-latest'
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
