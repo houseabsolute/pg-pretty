@@ -42,7 +42,7 @@ enum ContextType {
 pub struct Formatter {
     a_expr_depth: u8,
     bool_expr_depth: u8,
-    max_line_length: usize,
+    max_line_len: usize,
     indent_width: usize,
     indents: Vec<usize>,
     contexts: Vec<ContextType>,
@@ -62,7 +62,7 @@ impl Formatter {
         Self {
             a_expr_depth: 0,
             bool_expr_depth: 0,
-            max_line_length: 100,
+            max_line_len: 100,
             indent_width: 4,
             indents: vec![0],
             contexts: vec![],
@@ -211,7 +211,7 @@ impl Formatter {
                         })
                         .collect::<Result<Vec<_>, _>>()
                 };
-                prefix = self.one_line_or_many(&prefix, false, true, maker)?;
+                prefix = self.one_line_or_many(&prefix, false, true, 0, maker)?;
                 if prefix.contains('\n') {
                     prefix.push('\n');
                 } else {
@@ -238,7 +238,7 @@ impl Formatter {
         if can_be_one_line {
             return Ok(format!(
                 "{}\n",
-                self.one_line_or_many(&prefix, true, false, maker)?
+                self.one_line_or_many(&prefix, true, false, 0, maker)?
             ));
         }
 
@@ -380,7 +380,7 @@ impl Formatter {
             // something like "foo IN (1, 2)", but could it also be something
             // else that shouldn't be joined by commas?
             OneOrManyNodes::Many(r) => {
-                e.push(self.one_line_or_many("", false, true, |f| f.formatted_list(&r))?)
+                e.push(self.one_line_or_many("", false, true, 0, |f| f.formatted_list(&r))?)
             }
         }
         if self.a_expr_depth > 1 {
@@ -474,7 +474,7 @@ impl Formatter {
     //#[trace]
     fn format_not_expr(&mut self, b: &BoolExpr) -> R {
         let maker = |f: &mut Self| Ok(vec![f.format_node(&b.args[0])?]);
-        self.one_line_or_many("NOT ", false, true, maker)
+        self.one_line_or_many("NOT ", false, true, 0, maker)
     }
 
     //#[trace]
@@ -641,7 +641,7 @@ impl Formatter {
             }
         };
 
-        self.one_line_or_many(prefix, false, true, |f| f.formatted_list(&r.args))
+        self.one_line_or_many(prefix, false, true, 0, |f| f.formatted_list(&r.args))
     }
 
     //#[trace]
@@ -695,7 +695,7 @@ impl Formatter {
                 .collect::<Vec<String>>())
         };
 
-        formatter.one_line_or_many(&grouping_set, false, true, maker)
+        formatter.one_line_or_many(&grouping_set, false, true, 0, maker)
     }
 
     //#[trace]
@@ -778,7 +778,7 @@ impl Formatter {
         if let Some(u) = &j.using_clause {
             let using = format!("USING {}", self.format_using_clause(u));
             // + 1 for space before "USING"
-            if self.len_after_nl(&e) + using.len() + 1 > self.max_line_length {
+            if self.len_after_nl(&e) + using.len() + 1 > self.max_line_len {
                 e.push('\n');
                 self.push_indent_one_level();
                 e.push_str(&self.indent_str(&using));
@@ -852,7 +852,7 @@ impl Formatter {
     fn format_group_by_clause(&mut self, group: &[Node]) -> R {
         Ok(format!(
             "{}\n",
-            self.one_line_or_many("GROUP BY ", false, false, |f| f.formatted_list(group))?
+            self.one_line_or_many("GROUP BY ", false, false, 0, |f| f.formatted_list(group))?
         ))
     }
 
@@ -908,7 +908,7 @@ impl Formatter {
                 one_line.push(' ');
                 one_line.push_str(wait);
             }
-            if self.fits_on_one_line(&one_line) {
+            if self.fits_on_one_line(&one_line, 0) {
                 formatted.push(one_line);
                 continue;
             }
@@ -979,7 +979,7 @@ impl Formatter {
 
         Ok(format!(
             "{}\n",
-            self.one_line_or_many("ORDER BY ", false, false, maker)?
+            self.one_line_or_many("ORDER BY ", false, false, 0, maker)?
         ))
     }
 
@@ -1059,7 +1059,8 @@ impl Formatter {
                         let mut c = f.format_func_call(&c)?;
                         if let Some(defs) = &elt.1 {
                             c.push_str(" AS ");
-                            c.push_str(&f.format_column_def_list(defs)?);
+                            let last_line_len = f.last_line_len(&c);
+                            c.push_str(&f.format_column_def_list(defs, last_line_len)?);
                         }
                         Ok(c)
                     }
@@ -1068,7 +1069,7 @@ impl Formatter {
                 .collect::<Result<Vec<_>, _>>()
         };
 
-        let mut formatted = self.one_line_or_many(&prefix, false, add_parens, maker)?;
+        let mut formatted = self.one_line_or_many(&prefix, false, add_parens, 0, maker)?;
         if range_func.alias.is_some() || range_func.coldeflist.is_some() {
             formatted.push_str(" AS ");
         }
@@ -1081,13 +1082,14 @@ impl Formatter {
             if range_func.alias.is_some() {
                 formatted.push(' ');
             }
-            formatted.push_str(&self.format_column_def_list(&defs)?);
+            let last_line_len = self.last_line_len(&formatted);
+            formatted.push_str(&self.format_column_def_list(&defs, last_line_len)?);
         }
 
         Ok(formatted)
     }
 
-    fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper]) -> R {
+    fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper], last_line_len: usize) -> R {
         let maker = |f: &mut Self| {
             defs.iter()
                 .map(|d| {
@@ -1097,7 +1099,7 @@ impl Formatter {
                 .collect::<Result<Vec<_>, _>>()
         };
 
-        self.one_line_or_many("", false, true, maker)
+        self.one_line_or_many("", false, true, last_line_len, maker)
     }
 
     fn format_column_def(&mut self, def: &ColumnDef) -> R {
@@ -1115,6 +1117,7 @@ impl Formatter {
         prefix: &str,
         indent_prefix: bool,
         add_parens: bool,
+        current_indent: usize,
         mut items_maker: F,
     ) -> R
     where
@@ -1129,7 +1132,7 @@ impl Formatter {
 
         let mut parens: [&str; 2] = ["", ""];
         if add_parens {
-            // This could be a space with a string in it. It'd be better to be
+            // This could be a string with a space in it. It'd be better to be
             // a bit smarter about the contents somehow.
             if items.len() == 1 && !items[0].contains(' ') {
                 parens = ["(", ")"];
@@ -1142,7 +1145,7 @@ impl Formatter {
         one_line.push_str(&items.join(", "));
         one_line.push_str(parens[1]);
 
-        if !one_line.contains('\n') && self.fits_on_one_line(&one_line) {
+        if !one_line.contains('\n') && self.fits_on_one_line(&one_line, current_indent) {
             return Ok(one_line);
         }
 
@@ -1205,11 +1208,19 @@ impl Formatter {
         Ok(many)
     }
 
-    fn fits_on_one_line(&self, line: &str) -> bool {
+    fn fits_on_one_line(&self, line: &str, extra_indent: usize) -> bool {
         if line.contains('\n') {
             return false;
         }
-        self.current_indent() + line.len() <= self.max_line_length
+        self.current_indent() + line.len() + extra_indent <= self.max_line_len
+    }
+
+    fn last_line_len(&self, text: &str) -> usize {
+        let index = match text.rfind('\n') {
+            Some(i) => i,
+            None => 0,
+        };
+        text.len() - index
     }
 
     fn is_in_context(&self, t: ContextType) -> bool {
@@ -1615,7 +1626,7 @@ mod tests {
             ),
         ];
         run_tests(tests, |f, n| {
-            f.max_line_length = 20;
+            f.max_line_len = 20;
             f.format_from_element(&n, false)
         })
     }

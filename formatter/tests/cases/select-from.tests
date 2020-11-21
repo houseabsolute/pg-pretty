@@ -253,3 +253,22 @@ FROM ROWS FROM (
          distributors_3(111) AS ( f1 int, f2 text )
      ) AS d ( d1 int, d2 text )
 ----
+
+
+++++
+SELECT FROM multiple ( func AS (cols) ) AS name (cols) with long lines
+----
+SELECT * FROM ROWS FROM ( very_long_function_name_goes_here_and_it_keeps_going(111) AS ( very_long_column_name_goes_here1 int, very_long_column_name_goes_here1 text ), distributors_3(111) AS ( f1 int, f2 text ) ) AS d (very_long_column_name_goes_here_and_keeps_going_and_going1 int, very_long_column_name_goes_here_and_keeps_going_and_going text)
+----
+SELECT *
+FROM ROWS FROM (
+         very_long_function_name_goes_here_and_it_keeps_going(111) AS (
+             very_long_column_name_goes_here1 int,
+             very_long_column_name_goes_here1 text
+         ),
+         distributors_3(111) AS ( f1 int, f2 text )
+     ) AS d (
+         very_long_column_name_goes_here_and_keeps_going_and_going1 int,
+         very_long_column_name_goes_here_and_keeps_going_and_going text
+     )
+----
