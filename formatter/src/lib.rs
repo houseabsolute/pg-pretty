@@ -59,7 +59,7 @@ impl Formatter {
         let mut type_renaming: HashMap<String, String> = HashMap::new();
         type_renaming.insert("int4".to_string(), "int".to_string());
 
-        Formatter {
+        Self {
             a_expr_depth: 0,
             bool_expr_depth: 0,
             max_line_length: 100,
