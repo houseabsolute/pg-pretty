@@ -838,24 +838,23 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_using_clause(&self, using: &[StringStructWrapper]) -> String {
-        let mut c = "(".to_string();
-        if using.len() > 1 {
-            c.push(' ');
+    fn format_using_clause(&self, u: &[StringStructWrapper]) -> String {
+        let mut using = "(".to_string();
+        if u.len() > 1 {
+            using.push(' ');
         }
-        c.push_str(
-            using
-                .iter()
+        using.push_str(
+            u.iter()
                 .map(|StringStructWrapper::StringStruct(u)| u.str.clone())
                 .collect::<Vec<String>>()
                 .join(", ")
                 .as_str(),
         );
-        if using.len() > 1 {
-            c.push(' ');
+        if u.len() > 1 {
+            using.push(' ');
         }
-        c.push(')');
-        c
+        using.push(')');
+        using
     }
 
     //#[trace]
@@ -884,31 +883,31 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_group_by_clause(&mut self, group: &[Node]) -> R {
+    fn format_group_by_clause(&mut self, g: &[Node]) -> R {
         Ok(format!(
             "{}\n",
-            self.one_line_or_many("GROUP BY ", false, false, 0, |f| f.formatted_list(group))?
+            self.one_line_or_many("GROUP BY ", false, false, 0, |f| f.formatted_list(g))?
         ))
     }
 
     //#[trace]
-    fn format_having_clause(&mut self, having: &Node) -> R {
-        let mut h = self.indent_str("HAVING ");
+    fn format_having_clause(&mut self, h: &Node) -> R {
+        let mut having = self.indent_str("HAVING ");
 
-        self.push_indent_from_str(&h);
-        h.push_str(&self.format_node(having)?);
+        self.push_indent_from_str(&having);
+        having.push_str(&self.format_node(h)?);
         self.pop_indent();
 
-        h.push('\n');
+        having.push('\n');
 
-        Ok(h)
+        Ok(having)
     }
 
     //#[trace]
-    fn format_locking_clause(&mut self, locking: &[LockingClauseWrapper]) -> R {
-        let mut formatted: Vec<String> = vec![];
+    fn format_locking_clause(&mut self, l: &[LockingClauseWrapper]) -> R {
+        let mut locking: Vec<String> = vec![];
 
-        for LockingClauseWrapper::LockingClause(c) in locking {
+        for LockingClauseWrapper::LockingClause(c) in l {
             let s = match &c.strength {
                 LockClauseStrength::LcsNone => panic!("got locking strength of none!"),
                 LockClauseStrength::LcsForkeyshare => "KEY SHARE",
@@ -944,7 +943,7 @@ impl Formatter {
                 one_line.push_str(wait);
             }
             if self.fits_on_one_line(&one_line, 0) {
-                formatted.push(one_line);
+                locking.push(one_line);
                 continue;
             }
 
@@ -970,17 +969,17 @@ impl Formatter {
             }
             self.pop_indent();
 
-            formatted.push(many);
+            locking.push(many);
         }
 
-        Ok(format!("{}\n", formatted.join("\n")))
+        Ok(format!("{}\n", locking.join("\n")))
     }
 
     //#[trace]
-    fn format_order_by_clause(&mut self, order: &[SortByWrapper]) -> R {
+    fn format_order_by_clause(&mut self, o: &[SortByWrapper]) -> R {
         let maker = |f: &mut Self| {
-            let mut ob: Vec<String> = vec![];
-            for SortByWrapper::SortBy(s) in order {
+            let mut order_by: Vec<String> = vec![];
+            for SortByWrapper::SortBy(s) in o {
                 let mut el = f.format_node(&s.node)?;
                 match s.sortby_dir {
                     SortByDir::SortbyDefault => (),
@@ -1007,9 +1006,9 @@ impl Formatter {
                     SortByNulls::SortbyNullsFirst => el.push_str(" NULLS FIRST"),
                     SortByNulls::SortbyNullsLast => el.push_str(" NULLS LAST"),
                 }
-                ob.push(el);
+                order_by.push(el);
             }
-            Ok(ob)
+            Ok(order_by)
         };
 
         Ok(format!(
@@ -1019,25 +1018,25 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_type_cast(&mut self, type_cast: &TypeCast) -> R {
-        let mut cast = self.format_node(&*type_cast.arg)?;
-        cast.push_str("::");
-        cast.push_str(&self.format_type_name(&type_cast.type_name)?);
+    fn format_type_cast(&mut self, tc: &TypeCast) -> R {
+        let mut type_cast = self.format_node(&*tc.arg)?;
+        type_cast.push_str("::");
+        type_cast.push_str(&self.format_type_name(&tc.type_name)?);
 
         // This is some oddity of the parser. It turns TRUE and FALSE literals
         // into this cast expression.
-        if cast == "'t'::bool" {
+        if type_cast == "'t'::bool" {
             return Ok("TRUE".to_string());
-        } else if cast == "'f'::bool" {
+        } else if type_cast == "'f'::bool" {
             return Ok("FALSE".to_string());
         }
 
-        Ok(cast)
+        Ok(type_cast)
     }
 
     //#[trace]
-    fn format_type_name(&mut self, type_name: &TypeNameWrapper) -> R {
-        match type_name {
+    fn format_type_name(&mut self, tn: &TypeNameWrapper) -> R {
+        match tn {
             TypeNameWrapper::TypeName(t) => Ok(t
                 .names
                 .iter()
@@ -1053,15 +1052,15 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_subselect(&mut self, sub: &RangeSubselect) -> R {
-        let mut s = if sub.lateral {
+    fn format_subselect(&mut self, s: &RangeSubselect) -> R {
+        let mut subselect = if s.lateral {
             "LATERAL ".to_string()
         } else {
             String::new()
         };
-        s.push_str("(\n");
+        subselect.push_str("(\n");
 
-        let SelectStmtWrapper::SelectStmt(stmt) = &*sub.subquery;
+        let SelectStmtWrapper::SelectStmt(stmt) = &*s.subquery;
         let mut subformatter = self.new_subformatter();
         // The select will end with a newline, but we want to remove that,
         // then wrap the whole thing in parens, at which point we'll add the
@@ -1070,25 +1069,25 @@ impl Formatter {
             .format_select_stmt(&stmt)?
             .trim_end()
             .to_string();
-        s.push_str(formatted);
+        subselect.push_str(formatted);
 
-        s.push('\n');
-        s.push_str(&self.indent_str(")"));
-        if let Some(AliasWrapper::Alias(a)) = &sub.alias {
-            s.push_str(&Self::alias_name(&a.aliasname));
+        subselect.push('\n');
+        subselect.push_str(&self.indent_str(")"));
+        if let Some(AliasWrapper::Alias(a)) = &s.alias {
+            subselect.push_str(&Self::alias_name(&a.aliasname));
         }
 
-        Ok(s)
+        Ok(subselect)
     }
 
     //#[trace]
-    fn format_range_function(&mut self, range_func: &RangeFunction) -> R {
-        let funcs = &range_func.functions;
+    fn format_range_function(&mut self, rf: &RangeFunction) -> R {
+        let funcs = &rf.functions;
         if funcs.is_empty() {
             return Err(Error::RangeFunctionDoesNotHaveAnyFunctions);
         }
 
-        let mut prefix = if range_func.lateral {
+        let mut prefix = if rf.lateral {
             "LATERAL ".to_string()
         } else {
             String::new()
@@ -1098,7 +1097,7 @@ impl Formatter {
         if funcs.len() > 1 {
             prefix.push_str("ROWS FROM ");
             add_parens = true;
-        } else if range_func.is_rowsfrom {
+        } else if rf.is_rowsfrom {
             prefix.push_str("ROWS FROM ");
         }
 
@@ -1120,43 +1119,43 @@ impl Formatter {
                 .collect::<Result<Vec<_>, _>>()
         };
 
-        let mut formatted = self.one_line_or_many(&prefix, false, add_parens, 0, maker)?;
-        if range_func.alias.is_some() || range_func.coldeflist.is_some() {
-            formatted.push_str(" AS ");
+        let mut range_func = self.one_line_or_many(&prefix, false, add_parens, 0, maker)?;
+        if rf.alias.is_some() || rf.coldeflist.is_some() {
+            range_func.push_str(" AS ");
         }
 
-        if let Some(AliasWrapper::Alias(a)) = &range_func.alias {
-            formatted.push_str(&a.aliasname);
+        if let Some(AliasWrapper::Alias(a)) = &rf.alias {
+            range_func.push_str(&a.aliasname);
         }
 
-        if let Some(defs) = &range_func.coldeflist {
-            if range_func.alias.is_some() {
-                formatted.push(' ');
+        if let Some(defs) = &rf.coldeflist {
+            if rf.alias.is_some() {
+                range_func.push(' ');
             }
-            let last_line_len = self.last_line_len(&formatted);
-            formatted.push_str(&self.format_column_def_list(&defs, last_line_len)?);
+            let last_line_len = self.last_line_len(&range_func);
+            range_func.push_str(&self.format_column_def_list(&defs, last_line_len)?);
         }
 
-        Ok(formatted)
+        Ok(range_func)
     }
 
-    fn format_range_table_sample(&mut self, sample: &RangeTableSample) -> R {
+    fn format_range_table_sample(&mut self, rts: &RangeTableSample) -> R {
         self.contexts.push(ContextType::RangeTableSample);
 
-        let mut s = self.format_node(&sample.relation)?;
-        s.push_str(" TABLESAMPLE ");
-        s.push_str(&self.joined_list(&sample.method, ".")?);
-        s.push('(');
-        s.push_str(&self.joined_list(&sample.args, ", ")?);
-        s.push(')');
+        let mut table_sample = self.format_node(&rts.relation)?;
+        table_sample.push_str(" TABLESAMPLE ");
+        table_sample.push_str(&self.joined_list(&rts.method, ".")?);
+        table_sample.push('(');
+        table_sample.push_str(&self.joined_list(&rts.args, ", ")?);
+        table_sample.push(')');
 
-        if let Some(r) = &sample.repeatable {
-            s.push_str(" REPEATABLE (");
-            s.push_str(&self.format_node(&*r)?);
-            s.push(')');
+        if let Some(r) = &rts.repeatable {
+            table_sample.push_str(" REPEATABLE (");
+            table_sample.push_str(&self.format_node(&*r)?);
+            table_sample.push(')');
         }
 
-        Ok(s)
+        Ok(table_sample)
     }
 
     fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper], last_line_len: usize) -> R {
