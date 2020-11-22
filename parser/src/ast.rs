@@ -1,6 +1,6 @@
 #![allow(clippy::large_enum_variant)]
-use serde::{Deserialize, Serialize};
-use serde_repr::{Deserialize_repr, Serialize_repr};
+use serde::Deserialize;
+use serde_repr::Deserialize_repr;
 use serde_with::skip_serializing_none;
 use strum_macros::Display;
 
@@ -10,7 +10,7 @@ pub type Index = u64;
 pub type List = Vec<Node>;
 pub type Oid = u64;
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum Root {
     RawStmt(RawStmt),
 }
@@ -21,14 +21,14 @@ pub enum Root {
 // members. So for example processing a Vec<ColumnRefField> is much simpler
 // than Vec<Node>, because ColumnRefField has just two variants.
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum OneOrManyNodes {
     One(Box<Node>),
     Many(Vec<Node>),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum ColumnRefField {
     #[serde(rename = "String")]
     StringStruct(StringStruct),
@@ -36,7 +36,7 @@ pub enum ColumnRefField {
     AStar(AStar),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum Value {
     BitString(BitString),
     Integer(Integer),
@@ -46,21 +46,21 @@ pub enum Value {
     StringStruct(StringStruct),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum StringOrTypeName {
     #[serde(rename = "String")]
     StringStruct(StringStruct),
     TypeName(TypeName),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum DefElemArgs {
     One(StringOrTypeName),
     Many(Vec<StringOrTypeName>),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 // The first node should always be a FuncCall and the optional list should
 // only contain ColumnDef nodes.
 pub struct RangeFunctionElement(pub Node, pub Option<Vec<ColumnDefWrapper>>);
@@ -72,7 +72,7 @@ pub struct RangeFunctionElement(pub Node, pub Option<Vec<ColumnDefWrapper>>);
 
 // A_ArrayExpr - an ARRAY[] construct
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename = "A_ArrayExpr")]
 pub struct AArrayExpr {
     // array element expressions
@@ -83,7 +83,7 @@ pub struct AArrayExpr {
 
 // A_Const - a literal constant
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename = "A_Const")]
 pub struct AConst {
     // value (includes type info, see value.h)
@@ -94,7 +94,7 @@ pub struct AConst {
 
 // A_Expr - infix, prefix, and postfix expressions
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename = "A_Expr")]
 pub struct AExpr {
     // see above
@@ -113,7 +113,7 @@ pub struct AExpr {
 // In slice case, either or both of lidx and uidx can be NULL (omitted).
 // In non-slice case, uidx holds the single subscript and lidx is always NULL.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename = "A_Indices")]
 pub struct AIndices {
     // true if slice (i.e., colon present)
@@ -137,7 +137,7 @@ pub struct AIndices {
 // Currently, A_Star must appear only as the last list element --- the grammar
 // is responsible for enforcing this!
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename = "A_Indirection")]
 pub struct AIndirection {
     // the thing being selected from
@@ -150,7 +150,7 @@ pub struct AIndirection {
 // This can appear within ColumnRef.fields, A_Indirection.indirection, and
 // ResTarget.indirection lists.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename = "A_Star")]
 pub struct AStar {}
 
@@ -160,7 +160,7 @@ pub struct AStar {}
 // Note that simple "ALL PRIVILEGES" is represented as a NIL list, not
 // an AccessPriv with both fields null.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AccessPriv {
     // string name of privilege
     pub priv_name: Option<String>, // char*
@@ -200,7 +200,7 @@ pub struct AccessPriv {
 // indicates a non-final mode, aggtype reflects the transition data type
 // not the SQL-level output type of the aggregate.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Aggref {
     // pg_proc Oid of the aggregate
     pub aggfnoid: Option<Oid>, // Oid
@@ -248,7 +248,7 @@ pub struct Aggref {
 // associated with RTEs, there may be entries corresponding to dropped
 // columns; these are normally empty strings ("").  See parsenodes.h for info.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Alias {
     // aliased rel name (never qualified)
     pub aliasname: String, // char*
@@ -258,14 +258,14 @@ pub struct Alias {
 
 // Alter Collation
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterCollationStmt {
     pub collname: Option<List>, // List*
 }
 
 // Alter Database
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterDatabaseSetStmt {
     // database name
     pub dbname: Option<String>, // char*
@@ -275,7 +275,7 @@ pub struct AlterDatabaseSetStmt {
 
 // Alter Database
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterDatabaseStmt {
     // name of database to alter
     pub dbname: Option<String>, // char*
@@ -285,7 +285,7 @@ pub struct AlterDatabaseStmt {
 
 // Alter Default Privileges Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterDefaultPrivilegesStmt {
     // list of DefElem
     pub options: Vec<DefElemWrapper>, // List*
@@ -297,7 +297,7 @@ pub struct AlterDefaultPrivilegesStmt {
 // The fields are used in different ways by the different variants of
 // this command.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterDomainStmt {
     // T = alter column default
     // N = alter column drop not null
@@ -321,7 +321,7 @@ pub struct AlterDomainStmt {
 
 // Alter Type Statement, enum types
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterEnumStmt {
     // qualified name (list of Value strings)
     #[serde(rename = "typeName")]
@@ -345,7 +345,7 @@ pub struct AlterEnumStmt {
 
 // Alter EVENT TRIGGER Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterEventTrigStmt {
     // TRIGGER's name
     pub trigname: Option<String>, // char*
@@ -356,7 +356,7 @@ pub struct AlterEventTrigStmt {
 
 // Create/Alter Extension Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterExtensionContentsStmt {
     // Extension's name
     pub extname: Option<String>, // char*
@@ -370,7 +370,7 @@ pub struct AlterExtensionContentsStmt {
 
 // Only used for ALTER EXTENSION UPDATE; later might need an action field
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterExtensionStmt {
     pub extname: Option<String>, // char*
     // List of DefElem nodes
@@ -379,7 +379,7 @@ pub struct AlterExtensionStmt {
 
 // Create/Alter FOREIGN DATA WRAPPER Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterFdwStmt {
     // foreign-data wrapper name
     pub fdwname: Option<String>, // char*
@@ -391,7 +391,7 @@ pub struct AlterFdwStmt {
 
 // Create/Alter FOREIGN SERVER Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterForeignServerStmt {
     // server name
     pub servername: Option<String>, // char*
@@ -406,7 +406,7 @@ pub struct AlterForeignServerStmt {
 
 // Create Function Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterFunctionStmt {
     // name and args of function
     pub func: Option<ObjectWithArgsWrapper>, // ObjectWithArgs*
@@ -416,7 +416,7 @@ pub struct AlterFunctionStmt {
 
 // ALTER object DEPENDS ON EXTENSION extname
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterObjectDependsStmt {
     // OBJECT_FUNCTION, OBJECT_TRIGGER, etc
     #[serde(rename = "objectType")]
@@ -431,7 +431,7 @@ pub struct AlterObjectDependsStmt {
 
 // ALTER object SET SCHEMA Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterObjectSchemaStmt {
     // OBJECT_TABLE, OBJECT_TYPE, etc
     #[serde(rename = "objectType")]
@@ -449,7 +449,7 @@ pub struct AlterObjectSchemaStmt {
 
 // Alter Operator Family Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterOpFamilyStmt {
     // qualified name (list of Value strings)
     pub opfamilyname: Vec<StringStructWrapper>, // List*
@@ -464,7 +464,7 @@ pub struct AlterOpFamilyStmt {
 
 // Alter Operator Set Restrict, Join
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterOperatorStmt {
     // operator name and argument types
     pub opername: Option<ObjectWithArgsWrapper>, // ObjectWithArgs*
@@ -474,7 +474,7 @@ pub struct AlterOperatorStmt {
 
 // Alter Object Owner Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterOwnerStmt {
     // OBJECT_TABLE, OBJECT_TYPE, etc
     #[serde(rename = "objectType")]
@@ -489,7 +489,7 @@ pub struct AlterOwnerStmt {
 
 // Alter POLICY Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterPolicyStmt {
     // Policy's name
     pub policy_name: Option<String>, // char*
@@ -504,7 +504,7 @@ pub struct AlterPolicyStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterPublicationStmt {
     // Name of of the publication
     pub pubname: Option<String>, // char*
@@ -526,7 +526,7 @@ pub struct AlterPublicationStmt {
 // there's really no need to distinguish what the original spelling was,
 // but for CREATE we mark the type because the defaults vary.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterRoleSetStmt {
     // role
     pub role: Option<RoleSpecWrapper>, // RoleSpec*
@@ -542,7 +542,7 @@ pub struct AlterRoleSetStmt {
 // there's really no need to distinguish what the original spelling was,
 // but for CREATE we mark the type because the defaults vary.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterRoleStmt {
     // role
     pub role: Option<RoleSpecWrapper>, // RoleSpec*
@@ -554,7 +554,7 @@ pub struct AlterRoleStmt {
 
 // {Create|Alter} SEQUENCE Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterSeqStmt {
     // the sequence to alter
     pub sequence: Option<RangeVarWrapper>, // RangeVar*
@@ -567,7 +567,7 @@ pub struct AlterSeqStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterSubscriptionStmt {
     // ALTER_SUBSCRIPTION_OPTIONS, etc
     pub kind: AlterSubscriptionType, // AlterSubscriptionType
@@ -583,14 +583,14 @@ pub struct AlterSubscriptionStmt {
 
 // Alter System Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterSystemStmt {
     // SET subcommand
     pub setstmt: Option<VariableSetStmtWrapper>, // VariableSetStmt*
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterTSConfigurationStmt {
     // ALTER_TSCONFIG_ADD_MAPPING, etc
     pub kind: AlterTSConfigType, // AlterTSConfigType
@@ -613,7 +613,7 @@ pub struct AlterTSConfigurationStmt {
 
 // TS Dictionary stmts: DefineStmt, RenameStmt and DropStmt are default
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterTSDictionaryStmt {
     // qualified name (list of Value strings)
     pub dictname: Option<Vec<StringStructWrapper>>, // List*
@@ -623,7 +623,7 @@ pub struct AlterTSDictionaryStmt {
 
 // Alter Table
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterTableCmd {
     // Type of table alteration to apply
     pub subtype: Option<AlterTableType>, // AlterTableType
@@ -642,7 +642,7 @@ pub struct AlterTableCmd {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterTableMoveAllStmt {
     pub orig_tablespacename: Option<String>, // char*
     // Object type to move
@@ -655,7 +655,7 @@ pub struct AlterTableMoveAllStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterTableSpaceOptionsStmt {
     pub tablespacename: Option<String>, // char*
     pub options: Option<List>,          // List*
@@ -665,7 +665,7 @@ pub struct AlterTableSpaceOptionsStmt {
 
 // Alter Table
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterTableStmt {
     // table to work on
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -680,7 +680,7 @@ pub struct AlterTableStmt {
 
 // Create/Drop USER MAPPING Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlterUserMappingStmt {
     // user role
     pub user: Option<RoleSpecWrapper>, // RoleSpec*
@@ -696,7 +696,7 @@ pub struct AlterUserMappingStmt {
 // though, there are always exactly two; and the first one is the fast-start
 // plan.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct AlternativeSubPlan {
     // SubPlan(s) with equivalent results
     pub subplans: Option<List>, // List*
@@ -710,7 +710,7 @@ pub struct AlternativeSubPlan {
 // requires some effort (we have to fix the element type ID stored in the
 // array header).
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ArrayCoerceExpr {
     // input expression (yields an array)
     pub arg: Option<ExprWrapper>, // Expr*
@@ -737,7 +737,7 @@ pub struct ArrayCoerceExpr {
 // constituent expressions all yield arrays of element_typeid (ie, the same
 // type as array_typeid); at runtime we must check for compatible subscripts.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ArrayExpr {
     // type of expression result
     pub array_typeid: Option<Oid>, // Oid
@@ -776,7 +776,7 @@ pub struct ArrayExpr {
 // expanded array, then the implementation is allowed to modify that object
 // in-place and return the same object.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ArrayRef {
     // type of the array proper
     pub refarraytype: Option<Oid>, // Oid
@@ -802,13 +802,13 @@ pub struct ArrayRef {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct BitString {
     pub str: String, // char*
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct BoolExpr {
     pub boolop: BoolExprType, // BoolExprType
     // arguments to this expression
@@ -823,7 +823,7 @@ pub struct BoolExpr {
 // are supported.  Note that a NULL input does *not* cause a NULL result.
 // The appropriate test is performed and returned as a boolean Datum.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct BooleanTest {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -850,7 +850,7 @@ pub struct BooleanTest {
 // Note: we can test whether a CaseExpr has been through parse analysis
 // yet by checking whether casetype is InvalidOid or not.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CaseExpr {
     // type of expression result
     pub casetype: Option<Oid>, // Oid
@@ -872,7 +872,7 @@ pub struct CaseExpr {
 // We also use this in nested UPDATE expressions.
 // See transformAssignmentIndirection().
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CaseTestExpr {
     // type for substituted value
     #[serde(rename = "typeId")]
@@ -886,7 +886,7 @@ pub struct CaseTestExpr {
 
 // CaseWhen - one arm of a CASE expression
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CaseWhen {
     // condition expression
     pub expr: Option<ExprWrapper>, // Expr*
@@ -898,12 +898,12 @@ pub struct CaseWhen {
 
 // Checkpoint Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CheckPointStmt {}
 
 // Close Portal Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ClosePortalStmt {
     // name of the portal (cursor)
     pub portalname: Option<String>, // char*
@@ -911,7 +911,7 @@ pub struct ClosePortalStmt {
 
 // Cluster Statement (support pbrown's cluster index implementation)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ClusterStmt {
     // relation being indexed, or NULL if all
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -924,7 +924,7 @@ pub struct ClusterStmt {
 
 // CoalesceExpr - a COALESCE expression
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CoalesceExpr {
     // type of expression result
     pub coalescetype: Option<Oid>, // Oid
@@ -943,7 +943,7 @@ pub struct CoalesceExpr {
 // result; if not, an error is raised.  Note that this is equivalent to
 // RelabelType in the scenario where no constraints are applied.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CoerceToDomain {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -966,7 +966,7 @@ pub struct CoerceToDomain {
 // not the domain itself.  This is because we shouldn't consider the value
 // to be a member of the domain if we haven't yet checked its constraints.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CoerceToDomainValue {
     // type for substituted value
     #[serde(rename = "typeId")]
@@ -985,7 +985,7 @@ pub struct CoerceToDomainValue {
 // representations are compatible, implemented by invoking the source type's
 // typoutput function then the destination type's typinput function.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CoerceViaIO {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -1001,7 +1001,7 @@ pub struct CoerceViaIO {
 
 // CollateClause - a COLLATE expression
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CollateClause {
     // input expression
     pub arg: Option<Box<Node>>, // Node*
@@ -1015,7 +1015,7 @@ pub struct CollateClause {
 // The planner replaces CollateExpr with RelabelType during expression
 // preprocessing, so execution never sees a CollateExpr.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CollateExpr {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -1040,7 +1040,7 @@ pub struct CollateExpr {
 // the item and set raw_default instead.  CONSTR_DEFAULT items
 // should not appear in any subsequent processing.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ColumnDef {
     // name of column
     pub colname: String, // char*
@@ -1093,7 +1093,7 @@ pub struct ColumnDef {
 // for simplicity in the normal case, initial field selection from a table
 // name is represented within ColumnRef and not by adding A_Indirection.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ColumnRef {
     // field names (Value strings) or A_Star
     pub fields: Vec<ColumnRefField>, // List*
@@ -1103,7 +1103,7 @@ pub struct ColumnRef {
 
 // Comment On Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CommentStmt {
     // Object's type
     pub objtype: Option<ObjectType>, // ObjectType
@@ -1117,7 +1117,7 @@ pub struct CommentStmt {
 // representation of WITH list element
 // We don't currently support the SEARCH or CYCLE clause.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CommonTableExpr {
     // query name (never qualified)
     pub ctename: Option<String>, // char*
@@ -1145,7 +1145,7 @@ pub struct CommonTableExpr {
 
 // Create Type Statement, composite types
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CompositeTypeStmt {
     // the composite type to be created
     pub typevar: Option<RangeVarWrapper>, // RangeVar*
@@ -1159,7 +1159,7 @@ pub struct CompositeTypeStmt {
 // references).  This ensures that the Const node is self-contained and makes
 // it more likely that equal() will see logically identical values as equal.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Const {
     // pg_type OID of the constant's datatype
     pub consttype: Option<Oid>, // Oid
@@ -1187,7 +1187,7 @@ pub struct Const {
 
 // Foreign key matchtype codes
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Constraint {
     // see above
     pub contype: Option<ConstrType>, // ConstrType
@@ -1250,7 +1250,7 @@ pub struct Constraint {
 
 // SET CONSTRAINTS Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ConstraintsSetStmt {
     // List of names as RangeVars
     pub constraints: Option<List>, // List*
@@ -1266,7 +1266,7 @@ pub struct ConstraintsSetStmt {
 // used to convert a whole-row value of an inheritance child table into a
 // valid whole-row value of its parent table's rowtype.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ConvertRowtypeExpr {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -1283,7 +1283,7 @@ pub struct ConvertRowtypeExpr {
 // "COPY (query) TO file".  In any given CopyStmt, exactly one of "relation"
 // and "query" must be non-NULL.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CopyStmt {
     // the relation to copy
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -1307,7 +1307,7 @@ pub struct CopyStmt {
 
 // Create ACCESS METHOD Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateAmStmt {
     // access method name
     pub amname: Option<String>, // char*
@@ -1319,7 +1319,7 @@ pub struct CreateAmStmt {
 
 // CREATE CAST Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateCastStmt {
     pub sourcetype: Option<TypeNameWrapper>, // TypeName*
     pub targettype: Option<TypeNameWrapper>, // TypeName*
@@ -1331,7 +1331,7 @@ pub struct CreateCastStmt {
 
 // CREATE CONVERSION Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateConversionStmt {
     // Name of the conversion
     pub conversion_name: Option<List>, // List*
@@ -1348,7 +1348,7 @@ pub struct CreateConversionStmt {
 
 // Create Domain Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateDomainStmt {
     // qualified name (list of Value strings)
     pub domainname: Vec<StringStructWrapper>, // List*
@@ -1364,7 +1364,7 @@ pub struct CreateDomainStmt {
 
 // Create Type Statement, enum types
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateEnumStmt {
     // qualified name (list of Value strings)
     #[serde(rename = "typeName")]
@@ -1375,7 +1375,7 @@ pub struct CreateEnumStmt {
 
 // Create EVENT TRIGGER Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateEventTrigStmt {
     // TRIGGER's name
     pub trigname: Option<String>, // char*
@@ -1389,7 +1389,7 @@ pub struct CreateEventTrigStmt {
 
 // Create/Alter Extension Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateExtensionStmt {
     pub extname: Option<String>, // char*
     // just do nothing if it already exists?
@@ -1401,7 +1401,7 @@ pub struct CreateExtensionStmt {
 
 // Create/Alter FOREIGN DATA WRAPPER Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateFdwStmt {
     // foreign-data wrapper name
     pub fdwname: Option<String>, // char*
@@ -1413,7 +1413,7 @@ pub struct CreateFdwStmt {
 
 // Create/Alter FOREIGN SERVER Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateForeignServerStmt {
     // server name
     pub servername: Option<String>, // char*
@@ -1432,7 +1432,7 @@ pub struct CreateForeignServerStmt {
 
 // Create FOREIGN TABLE Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateForeignTableStmt {
     pub base: Option<CreateStmtWrapper>, // CreateStmt
     pub servername: Option<String>,      // char*
@@ -1441,7 +1441,7 @@ pub struct CreateForeignTableStmt {
 
 // Create Function Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateFunctionStmt {
     // T => replace if already exists
     #[serde(default)]
@@ -1462,7 +1462,7 @@ pub struct CreateFunctionStmt {
 
 // Create Operator Class Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateOpClassItem {
     // see codes above
     pub itemtype: Option<i64>, // int
@@ -1481,7 +1481,7 @@ pub struct CreateOpClassItem {
 
 // Create Operator Class Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateOpClassStmt {
     // qualified name (list of Value strings)
     pub opclassname: Option<Vec<StringStructWrapper>>, // List*
@@ -1500,7 +1500,7 @@ pub struct CreateOpClassStmt {
 
 // Create Operator Family Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateOpFamilyStmt {
     // qualified name (list of Value strings)
     pub opfamilyname: Option<Vec<StringStructWrapper>>, // List*
@@ -1511,7 +1511,7 @@ pub struct CreateOpFamilyStmt {
 // Create/Drop PROCEDURAL LANGUAGE Statements
 // Create PROCEDURAL LANGUAGE Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreatePLangStmt {
     // T => replace if already exists
     #[serde(default)]
@@ -1531,7 +1531,7 @@ pub struct CreatePLangStmt {
 
 // Create POLICY Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreatePolicyStmt {
     // Policy's name
     pub policy_name: Option<String>, // char*
@@ -1551,7 +1551,7 @@ pub struct CreatePolicyStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreatePublicationStmt {
     // Name of of the publication
     pub pubname: Option<String>, // char*
@@ -1566,7 +1566,7 @@ pub struct CreatePublicationStmt {
 
 // Create Type Statement, range types
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateRangeStmt {
     // qualified name (list of Value strings)
     #[serde(rename = "typeName")]
@@ -1581,7 +1581,7 @@ pub struct CreateRangeStmt {
 // there's really no need to distinguish what the original spelling was,
 // but for CREATE we mark the type because the defaults vary.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateRoleStmt {
     // ROLE/USER/GROUP
     pub stmt_type: Option<RoleStmtType>, // RoleStmtType
@@ -1596,7 +1596,7 @@ pub struct CreateRoleStmt {
 // of the schema, such as CREATE TABLE, GRANT, etc.  These are analyzed and
 // executed after the schema itself is created.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateSchemaStmt {
     // the name of the schema to create
     pub schemaname: Option<String>, // char*
@@ -1612,7 +1612,7 @@ pub struct CreateSchemaStmt {
 
 // {Create|Alter} SEQUENCE Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateSeqStmt {
     // the sequence to create
     pub sequence: Option<RangeVarWrapper>, // RangeVar*
@@ -1629,7 +1629,7 @@ pub struct CreateSeqStmt {
 
 // Create Statistics Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateStatsStmt {
     // qualified name (list of Value strings)
     pub defnames: Option<Vec<StringStructWrapper>>, // List*
@@ -1651,7 +1651,7 @@ pub struct CreateStatsStmt {
 // Constraint nodes (in fact, only CONSTR_CHECK nodes, in the present
 // implementation).
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateStmt {
     // relation to create
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -1683,7 +1683,7 @@ pub struct CreateStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateSubscriptionStmt {
     // Name of of the subscription
     pub subname: Option<String>, // char*
@@ -1704,7 +1704,7 @@ pub struct CreateSubscriptionStmt {
 // The "query" field is handled similarly to EXPLAIN, though note that it
 // can be a SELECT or an EXECUTE, but not other DML statements.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateTableAsStmt {
     // the query (see comments above)
     pub query: Option<Box<Node>>, // Node*
@@ -1722,7 +1722,7 @@ pub struct CreateTableAsStmt {
 
 // Create/Drop Table Space Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateTableSpaceStmt {
     pub tablespacename: Option<String>, // char*
     pub owner: Option<RoleSpecWrapper>, // RoleSpec*
@@ -1732,7 +1732,7 @@ pub struct CreateTableSpaceStmt {
 
 // CREATE TRANSFORM Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateTransformStmt {
     #[serde(default)]
     pub replace: bool, // bool
@@ -1744,7 +1744,7 @@ pub struct CreateTransformStmt {
 
 // Create TRIGGER Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateTrigStmt {
     // TRIGGER's name
     pub trigname: Option<String>, // char*
@@ -1784,7 +1784,7 @@ pub struct CreateTrigStmt {
 
 // Create/Drop USER MAPPING Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateUserMappingStmt {
     // user role
     pub user: Option<RoleSpecWrapper>, // RoleSpec*
@@ -1799,7 +1799,7 @@ pub struct CreateUserMappingStmt {
 
 // Createdb Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CreatedbStmt {
     // name of database to create
     pub dbname: Option<String>, // char*
@@ -1816,7 +1816,7 @@ pub struct CreatedbStmt {
 // or as a reference to a run-time parameter of type REFCURSOR.  The latter
 // case is for the convenience of plpgsql.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct CurrentOfExpr {
     // RT index of target relation
     pub cvarno: Option<Index>, // Index
@@ -1828,7 +1828,7 @@ pub struct CurrentOfExpr {
 
 // DEALLOCATE Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DeallocateStmt {
     // The name of the plan to remove
     pub name: Option<String>, // char*
@@ -1836,7 +1836,7 @@ pub struct DeallocateStmt {
 
 // these planner-control flags do not correspond to any SQL grammar:
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DeclareCursorStmt {
     // name of the portal (cursor)
     pub portalname: Option<String>, // char*
@@ -1854,7 +1854,7 @@ pub struct DeclareCursorStmt {
 // where they are relevant; C code can just ignore those fields in other
 // statements.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DefElem {
     // NULL if unqualified name
     pub defnamespace: Option<String>, // char*
@@ -1869,7 +1869,7 @@ pub struct DefElem {
 
 // Create {Aggregate|Operator|Type} Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DefineStmt {
     // aggregate, operator, type
     pub kind: ObjectType, // ObjectType
@@ -1889,7 +1889,7 @@ pub struct DefineStmt {
 
 // Delete Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DeleteStmt {
     // relation to delete from
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -1909,7 +1909,7 @@ pub struct DeleteStmt {
 
 // Discard Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DiscardStmt {
     pub target: Option<DiscardMode>, // DiscardMode
 }
@@ -1917,7 +1917,7 @@ pub struct DiscardStmt {
 // DO Statement
 // DoStmt is the raw parser output, InlineCodeBlock is the execution-time API
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DoStmt {
     // List of DefElem nodes
     pub args: Option<Vec<DefElemWrapper>>, // List*
@@ -1925,7 +1925,7 @@ pub struct DoStmt {
 
 // DROP OWNED statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DropOwnedStmt {
     pub roles: Option<List>,            // List*
     pub behavior: Option<DropBehavior>, // DropBehavior
@@ -1937,7 +1937,7 @@ pub struct DropOwnedStmt {
 // there's really no need to distinguish what the original spelling was,
 // but for CREATE we mark the type because the defaults vary.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DropRoleStmt {
     // List of roles to remove
     pub roles: Option<List>, // List*
@@ -1948,7 +1948,7 @@ pub struct DropRoleStmt {
 
 // Drop Table|Sequence|View|Index|Type|Domain|Conversion|Schema Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DropStmt {
     // list of names
     pub objects: Option<List>, // List*
@@ -1966,7 +1966,7 @@ pub struct DropStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DropSubscriptionStmt {
     // Name of of the subscription
     pub subname: Option<String>, // char*
@@ -1979,7 +1979,7 @@ pub struct DropSubscriptionStmt {
 
 // Create/Drop Table Space Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DropTableSpaceStmt {
     pub tablespacename: Option<String>, // char*
     // skip error if missing?
@@ -1989,7 +1989,7 @@ pub struct DropTableSpaceStmt {
 
 // Create/Drop USER MAPPING Statements
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DropUserMappingStmt {
     // user role
     pub user: Option<RoleSpecWrapper>, // RoleSpec*
@@ -2002,7 +2002,7 @@ pub struct DropUserMappingStmt {
 
 // Dropdb Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct DropdbStmt {
     // database to drop
     pub dbname: Option<String>, // char*
@@ -2013,7 +2013,7 @@ pub struct DropdbStmt {
 
 // EXECUTE Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ExecuteStmt {
     // The name of the plan to execute
     pub name: Option<String>, // char*
@@ -2026,7 +2026,7 @@ pub struct ExecuteStmt {
 // Query node during parse analysis.  Note that rewriting and planning
 // of the query are always postponed until execution.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ExplainStmt {
     // the query (see comments above)
     pub query: Option<Box<Node>>, // Node*
@@ -2040,12 +2040,12 @@ pub struct ExplainStmt {
 // contains NodeTag, this is a formality, but it is an easy form of
 // documentation.  See also the ExprState node types in execnodes.h.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Expr {}
 
 // Fetch Statement (also Move)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FetchStmt {
     // see above
     pub direction: Option<FetchDirection>, // FetchDirection
@@ -2064,7 +2064,7 @@ pub struct FetchStmt {
 // value.  At runtime, the input expression is expected to yield a rowtype
 // Datum.  The specified field number is extracted and returned as a Datum.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FieldSelect {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -2089,7 +2089,7 @@ pub struct FieldSelect {
 // but the planner will collapse multiple updates of the same base column
 // into one FieldStore.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FieldStore {
     // input tuple value
     pub arg: Option<ExprWrapper>, // Expr*
@@ -2102,7 +2102,7 @@ pub struct FieldStore {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Float {
     pub str: String, // char*
 }
@@ -2113,7 +2113,7 @@ pub struct Float {
 // aliases and so on.  The output column set is implicitly just the union
 // of the outputs of the children.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FromExpr {
     // List of join subtrees
     pub fromlist: Option<List>, // List*
@@ -2132,7 +2132,7 @@ pub struct FromExpr {
 // Normally, you'd initialize this via makeFuncCall() and then only change the
 // parts of the struct its defaults don't match afterwards, as needed.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FuncCall {
     // qualified name of function
     pub funcname: List, // List*
@@ -2162,7 +2162,7 @@ pub struct FuncCall {
 
 // FuncExpr - expression node for a function call
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FuncExpr {
     // PG_PROC OID of the function
     pub funcid: Option<Oid>, // Oid
@@ -2189,7 +2189,7 @@ pub struct FuncExpr {
 
 // Create Function Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct FunctionParameter {
     // parameter name, or NULL if not given
     pub name: Option<String>, // char*
@@ -2208,7 +2208,7 @@ pub struct FunctionParameter {
 // should complain if any column lists appear.  grantee_roles is a list
 // of role names, as Value strings.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct GrantRoleStmt {
     // list of roles to be granted/revoked
     pub granted_roles: Option<List>, // List*
@@ -2228,7 +2228,7 @@ pub struct GrantRoleStmt {
 
 // Grant|Revoke Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct GrantStmt {
     // true = GRANT, false = REVOKE
     #[serde(default)]
@@ -2270,7 +2270,7 @@ pub struct GrantStmt {
 // In raw parse output we have only the args list; parse analysis fills in the
 // refs list, and the planner fills in the cols list.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct GroupingFunc {
     // arguments, not evaluated but kept for
     // benefit of EXPLAIN etc.
@@ -2286,7 +2286,7 @@ pub struct GroupingFunc {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct GroupingSet {
     pub kind: GroupingSetKind, // GroupingSetKind
     pub content: Option<List>, // List*
@@ -2294,7 +2294,7 @@ pub struct GroupingSet {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ImportForeignSchemaStmt {
     // FDW server name
     pub server_name: Option<String>, // char*
@@ -2315,7 +2315,7 @@ pub struct ImportForeignSchemaStmt {
 // index, and 'expr' is NULL.  For an index expression, 'name' is NULL and
 // 'expr' is the expression tree.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct IndexElem {
     // name of attribute to index, or NULL
     pub name: Option<String>, // char*
@@ -2341,7 +2341,7 @@ pub struct IndexElem {
 // must always be true in this case, and the fields describing the index
 // properties are empty.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct IndexStmt {
     // name of new index, or NULL for default
     pub idxname: Option<String>, // char*
@@ -2402,7 +2402,7 @@ pub struct IndexStmt {
 // ON CONFLICT unique index inference clause
 // Note: InferClause does not propagate into the Query representation.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct InferClause {
     // IndexElems to infer unique index
     #[serde(rename = "indexElems")]
@@ -2421,7 +2421,7 @@ pub struct InferClause {
 // primnode allows for a clean separation between the use of index parameters
 // by utility commands, and this node.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct InferenceElem {
     // expression to infer from, or NULL
     pub expr: Option<Box<Node>>, // Node*
@@ -2434,7 +2434,7 @@ pub struct InferenceElem {
 // DO Statement
 // DoStmt is the raw parser output, InlineCodeBlock is the execution-time API
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct InlineCodeBlock {
     // source text of anonymous code block
     pub source_text: Option<String>, // char*
@@ -2451,7 +2451,7 @@ pub struct InlineCodeBlock {
 // SELECT and VALUES cases.  If selectStmt is NULL, then the query
 // is INSERT ... DEFAULT VALUES.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct InsertStmt {
     // relation to insert into
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -2474,7 +2474,7 @@ pub struct InsertStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Integer {
     pub ival: i64, // long
 }
@@ -2485,7 +2485,7 @@ pub struct Integer {
 // SELECT Query for the view; otherwise it's NULL.  (Although it's actually
 // Query*, we declare it as Node* to avoid a forward reference.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct IntoClause {
     // target relation name
     pub rel: Option<RangeVarWrapper>, // RangeVar*
@@ -2526,7 +2526,7 @@ pub struct IntoClause {
 // generates JoinExprs internally; these can have rtindex = 0 if there are
 // no join alias variables referencing such joins.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct JoinExpr {
     // type of join
     pub jointype: JoinType, // JoinType
@@ -2550,7 +2550,7 @@ pub struct JoinExpr {
 
 // Listen Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ListenStmt {
     // condition name to listen on
     pub conditionname: Option<String>, // char*
@@ -2558,7 +2558,7 @@ pub struct ListenStmt {
 
 // Load Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct LoadStmt {
     // file to load
     pub filename: Option<String>, // char*
@@ -2566,7 +2566,7 @@ pub struct LoadStmt {
 
 // LOCK Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct LockStmt {
     // relations to lock
     pub relations: Option<List>, // List*
@@ -2584,7 +2584,7 @@ pub struct LockStmt {
 // a location field --- currently, parse analysis insists on unqualified
 // names in LockingClause.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct LockingClause {
     // FOR [KEY] UPDATE/SHARE relations
     #[serde(rename = "lockedRels")]
@@ -2597,7 +2597,7 @@ pub struct LockingClause {
 
 // MinMaxExpr - a GREATEST or LEAST function
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct MinMaxExpr {
     // common type of arguments and result
     pub minmaxtype: Option<Oid>, // Oid
@@ -2620,7 +2620,7 @@ pub struct MinMaxExpr {
 // row-valued-expression (which parse analysis will process only once, when
 // handling the MultiAssignRef with colno=1).
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct MultiAssignRef {
     // the row-valued expression
     pub source: Option<Box<Node>>, // Node*
@@ -2640,7 +2640,7 @@ pub struct MultiAssignRef {
 // The planner will convert argument lists to pure positional notation
 // during expression preprocessing, so execution never sees a NamedArgExpr.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct NamedArgExpr {
     // the argument expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -2657,7 +2657,7 @@ pub struct NamedArgExpr {
 // check permissions on the sequence.  This is used for identity columns,
 // where the sequence is an implicit dependency without its own permissions.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct NextValueExpr {
     pub seqid: Option<Oid>, // Oid
     #[serde(rename = "typeId")]
@@ -2666,7 +2666,7 @@ pub struct NextValueExpr {
 
 // Notify Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct NotifyStmt {
     // condition name to notify
     pub conditionname: Option<String>, // char*
@@ -2675,7 +2675,7 @@ pub struct NotifyStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Null {}
 
 // NullTest
@@ -2690,7 +2690,7 @@ pub struct Null {}
 // correspond to the SQL notation "row IS [NOT] NULL"; instead, this case
 // represents the SQL notation "row IS [NOT] DISTINCT FROM NULL".
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct NullTest {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -2707,7 +2707,7 @@ pub struct NullTest {
 // function.  So it is sufficient to identify an existing function, but it
 // is not enough info to define a function nor to call it.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ObjectWithArgs {
     // qualified name of function/operator
     pub objname: Option<List>, // List*
@@ -2724,7 +2724,7 @@ pub struct ObjectWithArgs {
 // representation of ON CONFLICT clause
 // Note: OnConflictClause does not propagate into the Query representation.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct OnConflictClause {
     // DO NOTHING or UPDATE?
     pub action: Option<OnConflictAction>, // OnConflictAction
@@ -2746,7 +2746,7 @@ pub struct OnConflictClause {
 // indexes) inferred are used to arbitrate whether or not the alternative ON
 // CONFLICT path is taken.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct OnConflictExpr {
     // DO NOTHING or UPDATE?
     pub action: Option<OnConflictAction>, // OnConflictAction
@@ -2779,7 +2779,7 @@ pub struct OnConflictExpr {
 // of the node.  The planner makes sure it is valid before passing the node
 // tree to the executor, but during parsing/planning opfuncid can be 0.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct OpExpr {
     // PG_OPERATOR OID of the operator
     pub opno: Option<Oid>, // Oid
@@ -2821,7 +2821,7 @@ pub struct OpExpr {
 // the low-order 16 bits contain the column number.  (This type
 // of Param is also converted to PARAM_EXEC during planning.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Param {
     // kind of parameter. See above
     pub paramkind: ParamKind, // ParamKind
@@ -2839,7 +2839,7 @@ pub struct Param {
 
 // ParamRef - specifies a $n parameter reference
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ParamRef {
     // the number of the parameter
     pub number: Option<i64>, // int
@@ -2851,7 +2851,7 @@ pub struct ParamRef {
 // This represents the portion of the partition key space assigned to a
 // particular partition.  These are stored on disk in pg_class.relpartbound.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct PartitionBoundSpec {
     // see PARTITION_STRATEGY codes above
     pub strategy: Option<char>, // char
@@ -2867,7 +2867,7 @@ pub struct PartitionBoundSpec {
 
 // PartitionCmd - info for ALTER TABLE ATTACH/DETACH PARTITION commands
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct PartitionCmd {
     // name of partition to attach/detach
     pub name: Option<RangeVarWrapper>, // RangeVar*
@@ -2879,7 +2879,7 @@ pub struct PartitionCmd {
 // expr can be either a raw expression tree or a parse-analyzed expression.
 // We don't store these on-disk, though.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct PartitionElem {
     // name of column to partition on, or NULL
     pub name: Option<String>, // char*
@@ -2894,7 +2894,7 @@ pub struct PartitionElem {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct PartitionRangeDatum {
     pub kind: PartitionRangeDatumKind, // PartitionRangeDatumKind
     // Const (or A_Const in raw tree), if kind is
@@ -2907,7 +2907,7 @@ pub struct PartitionRangeDatum {
 // PartitionSpec - parse-time representation of a partition key specification
 // This represents the key space we will be partitioning on.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct PartitionSpec {
     // partitioning strategy ('list' or 'range')
     pub strategy: Option<String>, // char*
@@ -2920,7 +2920,7 @@ pub struct PartitionSpec {
 
 // PREPARE Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct PrepareStmt {
     // Name of plan, arbitrary
     pub name: Option<String>, // char*
@@ -2938,7 +2938,7 @@ pub struct PrepareStmt {
 // Planning converts a Query tree into a Plan tree headed by a PlannedStmt
 // node --- the Query structure is not used by the executor.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Query {
     // select|insert|update|delete|utility
     #[serde(rename = "commandType")]
@@ -3061,7 +3061,7 @@ pub struct Query {
 // at the top level.  (We disallow coldeflist appearing both here and
 // per-function, but that's checked in parse analysis, not by the grammar.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeFunction {
     // does it have LATERAL prefix?
     #[serde(default)]
@@ -3083,7 +3083,7 @@ pub struct RangeFunction {
 
 // RangeSubselect - subquery appearing in a FROM clause
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeSubselect {
     // does it have LATERAL prefix?
     #[serde(default)]
@@ -3096,7 +3096,7 @@ pub struct RangeSubselect {
 
 // RangeTableFunc - raw form of "table functions" such as XMLTABLE
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeTableFunc {
     // does it have LATERAL prefix?
     #[serde(default)]
@@ -3119,7 +3119,7 @@ pub struct RangeTableFunc {
 // If for_ordinality is true (FOR ORDINALITY), then the column is an int4
 // column and the rest of the fields are ignored.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeTableFuncCol {
     // name of generated column
     pub colname: Option<String>, // char*
@@ -3148,7 +3148,7 @@ pub struct RangeTableFuncCol {
 // is wrapped around the node representing the <relation>, rather than being
 // a subfield of it.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeTableSample {
     // relation to be sampled
     pub relation: Box<Node>, // Node*
@@ -3229,7 +3229,7 @@ pub struct RangeTableSample {
 // Note that the planner turns each boolean expression into an implicitly
 // AND'ed sublist, as is its usual habit with qualification expressions.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeTblEntry {
     // see above
     pub rtekind: RTEKind, // RTEKind
@@ -3319,7 +3319,7 @@ pub struct RangeTblEntry {
 // (including dropped columns!), so that we can successfully ignore any
 // columns added after the query was parsed.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeTblFunction {
     // expression tree for func call
     pub funcexpr: Option<Box<Node>>, // Node*
@@ -3342,7 +3342,7 @@ pub struct RangeTblFunction {
 // nodes, but multiple pointers to the same node in a querytree cause
 // lots of headaches, so it seems better to store an index into the RT.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeTblRef {
     pub rtindex: Option<i64>, // int
 }
@@ -3353,7 +3353,7 @@ pub struct RangeTblRef {
 // recursively to child tables.  In some contexts it is also useful to carry
 // a TEMP table indication here.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RangeVar {
     // the catalog (database) name, or NULL
     pub catalogname: Option<String>, // char*
@@ -3382,7 +3382,7 @@ pub struct RangeVar {
 // stmt_location/stmt_len identify the portion of the source text string
 // containing this raw statement (useful for multi-statement strings).
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RawStmt {
     // raw parse tree
     pub stmt: Node, // Node*
@@ -3394,7 +3394,7 @@ pub struct RawStmt {
 
 // REASSIGN OWNED statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ReassignOwnedStmt {
     pub roles: Option<List>,              // List*
     pub newrole: Option<RoleSpecWrapper>, // RoleSpec*
@@ -3402,7 +3402,7 @@ pub struct ReassignOwnedStmt {
 
 // REFRESH MATERIALIZED VIEW Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RefreshMatViewStmt {
     // allow concurrent access?
     #[serde(default)]
@@ -3415,7 +3415,7 @@ pub struct RefreshMatViewStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ReindexStmt {
     // REINDEX_OBJECT_INDEX, REINDEX_OBJECT_TABLE,
     // etc.
@@ -3437,7 +3437,7 @@ pub struct ReindexStmt {
 // with just overwriting the type field of the input expression node,
 // so we need a separate node to show the coercion's result type.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RelabelType {
     // input expression
     pub arg: Option<ExprWrapper>, // Expr*
@@ -3455,7 +3455,7 @@ pub struct RelabelType {
 
 // Alter Object Rename Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RenameStmt {
     // OBJECT_TABLE, OBJECT_COLUMN, etc
     #[serde(rename = "renameType")]
@@ -3481,7 +3481,7 @@ pub struct RenameStmt {
 
 // Alter Table
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ReplicaIdentityStmt {
     pub identity_type: Option<char>, // char
     pub name: Option<String>,        // char*
@@ -3500,7 +3500,7 @@ pub struct ReplicaIdentityStmt {
 // 'val' is the expression to assign.
 // See A_Indirection for more info about what can appear in 'indirection'.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ResTarget {
     // column name or NULL
     pub name: Option<String>, // char*
@@ -3513,7 +3513,7 @@ pub struct ResTarget {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RoleSpec {
     // Type of this rolespec
     pub roletype: Option<RoleSpecType>, // RoleSpecType
@@ -3534,7 +3534,7 @@ pub struct RoleSpec {
 // of the pairwise comparisons.  However, we include = and <> in the
 // RowCompareType enum for the convenience of parser logic.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RowCompareExpr {
     // LT LE GE or GT, never EQ or NE
     pub rctype: Option<RowCompareType>, // RowCompareType
@@ -3570,7 +3570,7 @@ pub struct RowCompareExpr {
 // otherwise be very difficult to extract from the parsetree).  Like the
 // args list, colnames is one-for-one with physical fields of the rowtype.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RowExpr {
     // the fields
     pub args: List, // List*
@@ -3594,7 +3594,7 @@ pub struct RowExpr {
 // level.  Also, Query.hasForUpdate tells whether there were explicit FOR
 // UPDATE/SHARE/KEY SHARE clauses in the current query level.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RowMarkClause {
     // range table index of target relation
     pub rti: Option<Index>,                   // Index
@@ -3609,7 +3609,7 @@ pub struct RowMarkClause {
 
 // Create Rule Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RuleStmt {
     // relation the rule is for
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -3631,7 +3631,7 @@ pub struct RuleStmt {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SQLValueFunction {
     // which function this is
     pub op: Option<SQLValueFunctionOp>, // SQLValueFunctionOp
@@ -3648,7 +3648,7 @@ pub struct SQLValueFunction {
 // flag to remember whether it's ANY or ALL, and we don't have to store
 // the result type (or the collation) because it must be boolean.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ScalarArrayOpExpr {
     // PG_OPERATOR OID of the operator
     pub opno: Option<Oid>, // Oid
@@ -3667,7 +3667,7 @@ pub struct ScalarArrayOpExpr {
 
 // SECURITY LABEL Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SecLabelStmt {
     // Object's type
     pub objtype: Option<ObjectType>, // ObjectType
@@ -3689,7 +3689,7 @@ pub struct SecLabelStmt {
 // LIMIT, etc, clause values into a SELECT statement without worrying
 // whether it is a simple or compound SELECT.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SelectStmt {
     // NULL, list of DISTINCT ON exprs, or
     // lcons(NIL,NIL) for all (SELECT DISTINCT)
@@ -3761,7 +3761,7 @@ pub struct SelectStmt {
 // so a member of the colCollations list could be InvalidOid even though the
 // column has a collatable type.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SetOperationStmt {
     // type of set op
     pub op: Option<SetOperation>, // SetOperation
@@ -3791,7 +3791,7 @@ pub struct SetOperationStmt {
 // column default expression during rewriting.  But it is convenient to
 // treat it as an expression node during parsing and rewriting.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SetToDefault {
     // type for substituted value
     #[serde(rename = "typeId")]
@@ -3807,7 +3807,7 @@ pub struct SetToDefault {
 
 // SortBy - for ORDER BY clause
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SortBy {
     // expression to sort on
     pub node: Box<Node>, // Node*
@@ -3872,7 +3872,7 @@ pub struct SortBy {
 // ORDER BY and set up for the Unique step.  This is semantically necessary
 // for DISTINCT ON, and presents no real drawback for DISTINCT.)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SortGroupClause {
     // reference into targetlist
     #[serde(rename = "tleSortGroupRef")]
@@ -3890,7 +3890,7 @@ pub struct SortGroupClause {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename = "String")]
 pub struct StringStruct {
     pub str: String, // char*
@@ -3940,7 +3940,7 @@ pub struct StringStruct {
 // The CTE_SUBLINK case never occurs in actual SubLink nodes, but it is used
 // in SubPlans generated for WITH subqueries.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SubLink {
     // see above
     #[serde(rename = "subLinkType")]
@@ -3991,7 +3991,7 @@ pub struct SubLink {
 // SubPlan.  Note that these include the cost of the subquery proper,
 // evaluation of the testexpr if any, and any hashtable management overhead.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct SubPlan {
     // see above
     #[serde(rename = "subLinkType")]
@@ -4044,7 +4044,7 @@ pub struct SubPlan {
 
 // TableFunc - node for a table function, such as XMLTABLE.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TableFunc {
     // list of namespace uri
     pub ns_uris: Option<List>, // List*
@@ -4076,7 +4076,7 @@ pub struct TableFunc {
 
 // TableLikeClause - CREATE TABLE ( ... LIKE ... ) clause
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TableLikeClause {
     pub relation: Option<RangeVarWrapper>, // RangeVar*
     // OR of TableLikeOption flags
@@ -4086,7 +4086,7 @@ pub struct TableLikeClause {
 // TableSampleClause - TABLESAMPLE appearing in a transformed FROM clause
 // Unlike RangeTableSample, this is a subnode of the relevant RangeTblEntry.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TableSampleClause {
     // OID of the tablesample handler function
     pub tsmhandler: Option<Oid>, // Oid
@@ -4142,7 +4142,7 @@ pub struct TableSampleClause {
 // note that there are places that assume resjunk columns come after non-junk
 // columns.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TargetEntry {
     // expression to evaluate
     pub expr: Option<ExprWrapper>, // Expr*
@@ -4165,7 +4165,7 @@ pub struct TargetEntry {
 
 // {Begin|Commit|Rollback} Transaction Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TransactionStmt {
     // see above
     pub kind: TransactionStmtKind, // TransactionStmtKind
@@ -4181,7 +4181,7 @@ pub struct TransactionStmt {
 // AFTER triggers, but other permutations are accepted by the parser so we can
 // give a meaningful message from C code.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TriggerTransition {
     pub name: Option<String>, // char*
     #[serde(default, rename = "isNew")]
@@ -4192,7 +4192,7 @@ pub struct TriggerTransition {
 
 // Truncate Table Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TruncateStmt {
     // relations (RangeVars) to be truncated
     pub relations: Option<List>, // List*
@@ -4205,7 +4205,7 @@ pub struct TruncateStmt {
 
 // TypeCast - a CAST expression
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TypeCast {
     // the expression being casted
     pub arg: Box<Node>, // Node*
@@ -4226,7 +4226,7 @@ pub struct TypeCast {
 // the type of that field.  Otherwise (the normal case), names is a type
 // name possibly qualified with schema and database name.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct TypeName {
     // qualified name (list of Value strings)
     pub names: Vec<StringStructWrapper>, // List*
@@ -4252,7 +4252,7 @@ pub struct TypeName {
 
 // Unlisten Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct UnlistenStmt {
     // name to unlisten on, or NULL for all
     pub conditionname: Option<String>, // char*
@@ -4260,7 +4260,7 @@ pub struct UnlistenStmt {
 
 // Update Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct UpdateStmt {
     // relation to update
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -4286,7 +4286,7 @@ pub struct UpdateStmt {
 // just one node type for both.  Note that at least one of VACOPT_VACUUM
 // and VACOPT_ANALYZE must be set in options.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct VacuumStmt {
     // OR of VacuumOption flags
     pub options: Option<i64>, // int
@@ -4298,7 +4298,7 @@ pub struct VacuumStmt {
 
 // Symbols for the indexes of the special RTE entries in rules
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Var {
     // index of this var's relation in the range
     // table, or INNER_VAR/OUTER_VAR/INDEX_VAR
@@ -4325,7 +4325,7 @@ pub struct Var {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct VariableSetStmt {
     pub kind: VariableSetKind, // VariableSetKind
     // variable to be set
@@ -4339,14 +4339,14 @@ pub struct VariableSetStmt {
 
 // Show Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct VariableShowStmt {
     pub name: Option<String>, // char*
 }
 
 // Create View Statement
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct ViewStmt {
     // the view to be created
     pub view: Option<RangeVarWrapper>, // RangeVar*
@@ -4376,7 +4376,7 @@ pub struct ViewStmt {
 // the orderClause might or might not be copied (see copiedOrder); the framing
 // options are never copied, per spec.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct WindowClause {
     // window name (NULL in an OVER clause)
     pub name: Option<String>, // char*
@@ -4410,7 +4410,7 @@ pub struct WindowClause {
 // for the "OVER (window)" syntax, which is subtly different --- the latter
 // implies overriding the window frame clause.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct WindowDef {
     // window's own name
     pub name: Option<String>, // char*
@@ -4437,7 +4437,7 @@ pub struct WindowDef {
 
 // WindowFunc
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct WindowFunc {
     // pg_proc Oid of the function
     pub winfnoid: Option<Oid>, // Oid
@@ -4464,7 +4464,7 @@ pub struct WindowFunc {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct WithCheckOption {
     // kind of WCO
     pub kind: WCOKind, // WCOKind
@@ -4484,7 +4484,7 @@ pub struct WithCheckOption {
 // Note: WithClause does not propagate into the Query representation;
 // but CommonTableExpr does.
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct WithClause {
     // list of CommonTableExprs
     pub ctes: Option<List>, // List*
@@ -4496,7 +4496,7 @@ pub struct WithClause {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct XmlExpr {
     // xml function ID
     pub op: Option<XmlExprOp>, // XmlExprOp
@@ -4517,7 +4517,7 @@ pub struct XmlExpr {
 
 // XMLSERIALIZE (in raw parse tree only)
 #[skip_serializing_none]
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct XmlSerialize {
     // DOCUMENT or CONTENT
     pub xmloption: Option<XmlOptionType>, // XmlOptionType
@@ -4529,7 +4529,7 @@ pub struct XmlSerialize {
 }
 
 // A_Expr - infix, prefix, and postfix expressions
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum AExprKind {
     // normal operator
@@ -4567,7 +4567,7 @@ pub enum AExprKind {
 }
 
 // Supported operating modes (i.e., useful combinations of these options):
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum AggSplit {
     AggsplitSimple,
@@ -4575,7 +4575,7 @@ pub enum AggSplit {
     AggsplitFinalDeserial,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum AlterSubscriptionType {
     AlterSubscriptionOptions,
@@ -4586,7 +4586,7 @@ pub enum AlterSubscriptionType {
 }
 
 // TS Configuration stmts: DefineStmt, RenameStmt and DropStmt are default
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum AlterTSConfigType {
     AlterTsconfigAddMapping,
@@ -4596,7 +4596,7 @@ pub enum AlterTSConfigType {
     AlterTsconfigDropMapping,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum AlterTableType {
     // add column
@@ -4738,7 +4738,7 @@ pub enum AlterTableType {
 // Notice the arguments are given as a List.  For NOT, of course the list
 // must always have exactly one element.  For AND and OR, there can be two
 // or more arguments.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum BoolExprType {
     AndExpr,
@@ -4751,7 +4751,7 @@ pub enum BoolExprType {
 // is TRUE, FALSE, or UNKNOWN (ie, NULL).  All six meaningful combinations
 // are supported.  Note that a NULL input does *not* cause a NULL result.
 // The appropriate test is performed and returned as a boolean Datum.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum BoolTestType {
     IsTrue,
@@ -4761,7 +4761,7 @@ pub enum BoolTestType {
 // CmdType -
 // enums for type of operation represented by a Query or PlannedStmt
 // This is needed in both parsenodes.h and plannodes.h, so put it here...
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum CmdType {
     CmdUnknown,
@@ -4783,7 +4783,7 @@ pub enum CmdType {
 // CoercionContext - distinguishes the allowed set of type casts
 // NB: ordering of the alternatives is significant; later (larger) values
 // allow more casts than earlier ones.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum CoercionContext {
     // coercion in context of expression
@@ -4800,7 +4800,7 @@ pub enum CoercionContext {
 // the planner will consider equivalent implicit and explicit casts to be
 // equivalent.  In cases where those actually behave differently, the coercion
 // function's arguments will be different.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum CoercionForm {
     // display as a function call
@@ -4833,7 +4833,7 @@ pub enum CoercionForm {
 // separate Constraint nodes for simplicity of parsing.  parse_utilcmd.c makes
 // a pass through the constraints list to insert the info into the appropriate
 // Constraint node.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum ConstrType {
     // not standard SQL, but a lot of people
@@ -4861,7 +4861,7 @@ pub enum ConstrType {
 // practice that the grammar allows namespace and action only in statements
 // where they are relevant; C code can just ignore those fields in other
 // statements.)
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum DefElemAction {
     // no action given
@@ -4872,7 +4872,7 @@ pub enum DefElemAction {
 }
 
 // Discard Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum DiscardMode {
     DiscardAll,
@@ -4881,7 +4881,7 @@ pub enum DiscardMode {
     DiscardTemp,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum DropBehavior {
     // drop fails if any dependent objects
@@ -4891,7 +4891,7 @@ pub enum DropBehavior {
 }
 
 // Fetch Statement (also Move)
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum FetchDirection {
     FetchForward,
@@ -4900,7 +4900,7 @@ pub enum FetchDirection {
     FetchRelative,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum FunctionParameterMode {
     FuncParamIn = 105,
@@ -4910,7 +4910,7 @@ pub enum FunctionParameterMode {
     FuncParamTable = 116,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum GrantObjectType {
     // column
@@ -4942,7 +4942,7 @@ pub enum GrantObjectType {
 }
 
 // Grant|Revoke Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum GrantTargetType {
     // grant on specific named object(s)
@@ -4987,7 +4987,7 @@ pub enum GrantTargetType {
 // SETS( RowExpr(a,b) , CUBE( c, RowExpr(d,e) ) )
 // and parse analysis converts it to:
 // SETS( SIMPLE(1,2), CUBE( SIMPLE(3), SIMPLE(4,5) ) )
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum GroupingSetKind {
     GroupingSetEmpty,
@@ -4998,7 +4998,7 @@ pub enum GroupingSetKind {
 }
 
 // Import Foreign Schema Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum ImportForeignSchemaType {
     // all relations wanted
@@ -5015,7 +5015,7 @@ pub enum ImportForeignSchemaType {
 // a matching qualification.  For example, it tells what to do with a tuple
 // that has no match in the other relation.
 // This is needed in both parsenodes.h and plannodes.h, so put it here...
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum JoinType {
     // matching tuple pairs only
@@ -5039,7 +5039,7 @@ pub enum JoinType {
 // This enum represents the different strengths of FOR UPDATE/SHARE clauses.
 // The ordering here is important, because the highest numerical value takes
 // precedence when a RTE is specified multiple ways.  See applyLockingClause.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum LockClauseStrength {
     // no such clause - only used in PlanRowMark
@@ -5058,7 +5058,7 @@ pub enum LockClauseStrength {
 // clauses (i.e., it represents the NOWAIT and SKIP LOCKED options).
 // The ordering here is important, because the highest numerical value takes
 // precedence when a RTE is specified multiple ways.  See applyLockingClause.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum LockWaitPolicy {
     Lockwaitblock,
@@ -5067,7 +5067,7 @@ pub enum LockWaitPolicy {
 }
 
 // MinMaxExpr - a GREATEST or LEAST function
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum MinMaxOp {
     IsGreatest,
@@ -5085,7 +5085,7 @@ pub enum MinMaxOp {
 // NOTE: the combination of a rowtype input and argisrow==false does NOT
 // correspond to the SQL notation "row IS [NOT] NULL"; instead, this case
 // represents the SQL notation "row IS [NOT] DISTINCT FROM NULL".
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum NullTestType {
     IsNull,
@@ -5095,7 +5095,7 @@ pub enum NullTestType {
 // When a command can act on several kinds of objects with only one
 // parse structure required, use these constants to designate the
 // object type.  Note that commands typically don't support all the types.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum ObjectType {
     ObjectAccessMethod,
@@ -5150,7 +5150,7 @@ pub enum ObjectType {
 }
 
 // What to do at commit time for temporary relations
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum OnCommitAction {
     // No ON COMMIT clause (do nothing)
@@ -5166,7 +5166,7 @@ pub enum OnCommitAction {
 // OnConflictAction -
 // "ON CONFLICT" clause type of query
 // This is needed in both parsenodes.h and plannodes.h, so put it here...
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum OnConflictAction {
     // No "ON CONFLICT" clause
@@ -5189,7 +5189,7 @@ pub enum OnConflictAction {
 // Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
 // Portions Copyright (c) 1994, Regents of the University of California
 // src/include/nodes/parsenodes.h
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum OverridingKind {
     OverridingNotSet,
@@ -5217,7 +5217,7 @@ pub enum OverridingKind {
 // of the `paramid' field contain the SubLink's subLinkId, and
 // the low-order 16 bits contain the column number.  (This type
 // of Param is also converted to PARAM_EXEC during planning.)
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum ParamKind {
     ParamExtern,
@@ -5228,7 +5228,7 @@ pub enum ParamKind {
 
 // PartitionRangeDatum - one of the values in a range partition bound
 // This can be MINVALUE, MAXVALUE or a specific bounded value.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(i8)]
 pub enum PartitionRangeDatumKind {
     PartitionRangeDatumMinvalue = -1,
@@ -5237,7 +5237,7 @@ pub enum PartitionRangeDatumKind {
 }
 
 // Possible sources of a Query
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum QuerySource {
     // original parsetree (explicit query)
@@ -5318,7 +5318,7 @@ pub enum QuerySource {
 // rewriter to implement security-barrier views and/or row-level security.
 // Note that the planner turns each boolean expression into an implicitly
 // AND'ed sublist, as is its usual habit with qualification expressions.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum RTEKind {
     // ordinary relation reference
@@ -5340,7 +5340,7 @@ pub enum RTEKind {
 }
 
 // Reindex options
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum ReindexObjectType {
     // index
@@ -5356,7 +5356,7 @@ pub enum ReindexObjectType {
 }
 
 // RoleSpec - a role name or one of a few special values.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum RoleSpecType {
     // role name is stored as a C string
@@ -5374,7 +5374,7 @@ pub enum RoleSpecType {
 // Create/Alter/Drop User/Group statements.  In the ALTER and DROP cases
 // there's really no need to distinguish what the original spelling was,
 // but for CREATE we mark the type because the defaults vary.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum RoleStmtType {
     RolestmtRole,
@@ -5392,7 +5392,7 @@ pub enum RoleStmtType {
 // the = and <> cases are translated to simple AND or OR combinations
 // of the pairwise comparisons.  However, we include = and <> in the
 // RowCompareType enum for the convenience of parser logic.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum RowCompareType {
     RowcompareLt,
@@ -5411,7 +5411,7 @@ pub enum RowCompareType {
 // we would need to store typmod anyway for some of the datetime functions.
 // Note that currently, all variants return non-collating datatypes, so we do
 // not need a collation field; also, all these functions are stable.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum SQLValueFunctionOp {
     SvfopCurrentDate,
@@ -5440,7 +5440,7 @@ pub enum SQLValueFunctionOp {
 // type for both leaf and internal nodes allows gram.y to stick ORDER BY,
 // LIMIT, etc, clause values into a SELECT statement without worrying
 // whether it is a simple or compound SELECT.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum SetOperation {
     SetopNone,
@@ -5450,7 +5450,7 @@ pub enum SetOperation {
 }
 
 // Sort ordering options for ORDER BY and CREATE INDEX
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum SortByDir {
     SortbyDefault,
@@ -5460,7 +5460,7 @@ pub enum SortByDir {
     SortbyUsing,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum SortByNulls {
     SortbyNullsDefault,
@@ -5511,7 +5511,7 @@ pub enum SortByNulls {
 // are referenced by PARAM_MULTIEXPR Params appearing elsewhere in the tlist.
 // The CTE_SUBLINK case never occurs in actual SubLink nodes, but it is used
 // in SubPlans generated for WITH subqueries.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum SubLinkType {
     ExistsSublink,
@@ -5526,7 +5526,7 @@ pub enum SubLinkType {
 }
 
 // {Begin|Commit|Rollback} Transaction Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum TransactionStmtKind {
     TransStmtBegin,
@@ -5545,7 +5545,7 @@ pub enum TransactionStmtKind {
 // SET Statement (includes RESET)
 // "SET var TO DEFAULT" and "RESET var" are semantically equivalent, but we
 // preserve the distinction in VariableSetKind for CreateCommandTag().
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum VariableSetKind {
     // SET var = value
@@ -5563,7 +5563,7 @@ pub enum VariableSetKind {
 }
 
 // Create View Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum ViewCheckOption {
     NoCheckOption,
@@ -5575,7 +5575,7 @@ pub enum ViewCheckOption {
 // representation of WITH CHECK OPTION checks to be applied to new tuples
 // when inserting/updating an auto-updatable view, or RLS WITH CHECK
 // policies to be applied when inserting/updating a relation with RLS.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum WCOKind {
     // WCO on an auto-updatable view
@@ -5595,7 +5595,7 @@ pub enum WCOKind {
 // Note: result type/typmod/collation are not stored, but can be deduced
 // from the XmlExprOp.  The type/typmod fields are just used for display
 // purposes, and are NOT necessarily the true result type of the node.
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum XmlExprOp {
     // XMLCONCAT(args)
@@ -5616,7 +5616,7 @@ pub enum XmlExprOp {
     IsDocument,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
 pub enum XmlOptionType {
     XmloptionDocument,
@@ -5624,7 +5624,7 @@ pub enum XmlOptionType {
 }
 
 // A Node is a type that can be referenced from many different types of parsed statements.
-#[derive(Debug, Display, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Display, Deserialize, PartialEq)]
 pub enum Node {
     #[serde(rename = "A_ArrayExpr")]
     AArrayExpr(AArrayExpr),
@@ -5853,203 +5853,203 @@ pub enum Node {
     XmlSerialize(XmlSerialize),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum AccessPrivWrapper {
     AccessPriv(AccessPriv),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum AliasWrapper {
     Alias(Alias),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum CollateClauseWrapper {
     CollateClause(CollateClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum ColumnDefWrapper {
     ColumnDef(ColumnDef),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum ConstraintWrapper {
     Constraint(Constraint),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum CreateOpClassItemWrapper {
     CreateOpClassItem(CreateOpClassItem),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum CreateStmtWrapper {
     CreateStmt(CreateStmt),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum DefElemWrapper {
     DefElem(DefElem),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum ExprWrapper {
     Expr(Expr),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum FromExprWrapper {
     FromExpr(FromExpr),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum FunctionParameterWrapper {
     FunctionParameter(FunctionParameter),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum GrantStmtWrapper {
     GrantStmt(GrantStmt),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum GroupingSetWrapper {
     GroupingSet(GroupingSet),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum IndexElemWrapper {
     IndexElem(IndexElem),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum InferClauseWrapper {
     InferClause(InferClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum IntoClauseWrapper {
     IntoClause(IntoClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum LockingClauseWrapper {
     LockingClause(LockingClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum ObjectWithArgsWrapper {
     ObjectWithArgs(ObjectWithArgs),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum OnConflictClauseWrapper {
     OnConflictClause(OnConflictClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum OnConflictExprWrapper {
     OnConflictExpr(OnConflictExpr),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum PartitionBoundSpecWrapper {
     PartitionBoundSpec(PartitionBoundSpec),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum PartitionSpecWrapper {
     PartitionSpec(PartitionSpec),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum QueryWrapper {
     Query(Query),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum RangeTableFuncColWrapper {
     RangeTableFuncCol(RangeTableFuncCol),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum RangeTblFunctionWrapper {
     RangeTblFunction(RangeTblFunction),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum RangeVarWrapper {
     RangeVar(RangeVar),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum RoleSpecWrapper {
     RoleSpec(RoleSpec),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum RowMarkClauseWrapper {
     RowMarkClause(RowMarkClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum SelectStmtWrapper {
     SelectStmt(SelectStmt),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum SortByWrapper {
     SortBy(SortBy),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum SortGroupClauseWrapper {
     SortGroupClause(SortGroupClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum StringStructWrapper {
     #[serde(rename = "String")]
     StringStruct(StringStruct),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum TableFuncWrapper {
     TableFunc(TableFunc),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum TableSampleClauseWrapper {
     TableSampleClause(TableSampleClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum TypeNameWrapper {
     TypeName(TypeName),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum VariableSetStmtWrapper {
     VariableSetStmt(VariableSetStmt),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum WindowClauseWrapper {
     WindowClause(WindowClause),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum WindowDefWrapper {
     WindowDef(WindowDef),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum WithCheckOptionWrapper {
     WithCheckOption(WithCheckOption),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum WithClauseWrapper {
     WithClause(WithClause),
 }

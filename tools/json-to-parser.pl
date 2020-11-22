@@ -176,7 +176,7 @@ sub _one_struct ( $self, $name, $struct ) {
     $code .= _clean_comment( $struct->{comment} )
         if ( $struct->{comment} // q{} ) =~ /\S/;
     $code .= "#[skip_serializing_none]\n";
-    $code .= "#[derive(Debug, Deserialize, PartialEq, Serialize)]\n";
+    $code .= "#[derive(Debug, Deserialize, PartialEq)]\n";
 
     # We can't just have 'pub struct String' because that breaks all use of
     # the core String type.
@@ -286,8 +286,7 @@ sub _one_enum ( $self, $name, $enum ) {
         if ( $enum->{comment} // q{} ) =~ /\S/;
 
     my $rust_enum = $self->_rust_name($name);
-    $code
-        .= "#[derive(Debug, Deserialize_repr, Display, PartialEq, Serialize_repr)]\n";
+    $code .= "#[derive(Debug, Deserialize_repr, Display, PartialEq)]\n";
     my $int_type = $self->_rust_enum_int_type($rust_enum);
     $code .= "#[repr($int_type)]\n";
     $code .= "pub enum $rust_enum {\n";
@@ -318,7 +317,7 @@ sub _node_enums ($self) {
 
     my $code
         = "// A Node is a type that can be referenced from many different types of parsed statements.\n";
-    $code .= "#[derive(Debug, Display, Deserialize, PartialEq, Serialize)]\n";
+    $code .= "#[derive(Debug, Display, Deserialize, PartialEq)]\n";
     $code .= "pub enum Node {\n";
 
     # RawStmt will never contain itself, so we don't need the enum indirection
@@ -350,7 +349,7 @@ sub _struct_wrapper_enums ($self) {
             :                           q{};
         my $serde = $rename ? qq{    #[serde(rename = "$rename")]\n} : q{};
         $code .= <<"EOF";
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub enum ${name}Wrapper {
 $serde    $name($name),
 }
