@@ -444,7 +444,9 @@ my %overrides = (
         larg           => 'Option<Box<SelectStmtWrapper>>',
         rarg           => 'Option<Box<SelectStmtWrapper>>',
     },
-    StringStruct => { str => 'String' },
+    StringStruct => { str          => 'String' },
+    WindowClause => { frameOptions => 'FrameOptions' },
+    WindowDef    => { frameOptions => 'FrameOptions' },
 );
 
 my %not_optional = (

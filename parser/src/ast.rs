@@ -1,4 +1,5 @@
 #![allow(clippy::large_enum_variant)]
+use crate::flags::FrameOptions;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 use serde_with::skip_serializing_none;
@@ -4390,7 +4391,7 @@ pub struct WindowClause {
     pub order_clause: Option<List>, // List*
     // frame_clause options, see WindowDef
     #[serde(rename = "frameOptions")]
-    pub frame_options: Option<i64>, // int
+    pub frame_options: FrameOptions, // int
     // expression for starting bound, if any
     #[serde(rename = "startOffset")]
     pub start_offset: Option<Box<Node>>, // Node*
@@ -4424,7 +4425,7 @@ pub struct WindowDef {
     pub order_clause: Option<Vec<SortByWrapper>>, // List*
     // frame_clause options, see below
     #[serde(rename = "frameOptions")]
-    pub frame_options: Option<i64>, // int
+    pub frame_options: FrameOptions, // int
     // expression for starting bound, if any
     #[serde(rename = "startOffset")]
     pub start_offset: Option<Box<Node>>, // Node*

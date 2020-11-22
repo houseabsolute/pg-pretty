@@ -651,6 +651,7 @@ dependencies = [
 name = "pg-pretty-parser"
 version = "0.0.1"
 dependencies = [
+ "bitflags",
  "color-eyre",
  "libpg_query-sys",
  "serde",
