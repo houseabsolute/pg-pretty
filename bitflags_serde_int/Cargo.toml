@@ -1,0 +1,22 @@
+[package]
+name = "bitflags_serde_int"
+version = "0.0.1"
+authors = ["Dave Rolsky <autarch@urth.org>"]
+description = "Serialize and deserialize bitflags-created structs as an int"
+repository = "https://github.com/houseabsolute/pg-pretty"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "~1"
+quote = "~1"
+serde = "~1"
+syn = "~1"
+
+[dev-dependencies]
+bitflags = "~1"
+serde_json = "~1"

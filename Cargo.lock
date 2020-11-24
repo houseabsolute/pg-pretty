@@ -122,6 +122,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
+name = "bitflags_serde_int"
+version = "0.0.1"
+dependencies = [
+ "bitflags",
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "serde",
+ "serde_json",
+ "syn 1.0.48",
+]
+
+[[package]]
 name = "blake2b_simd"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,6 +664,7 @@ name = "pg-pretty-parser"
 version = "0.0.1"
 dependencies = [
  "bitflags",
+ "bitflags_serde_int",
  "color-eyre",
  "libpg_query-sys",
  "serde",

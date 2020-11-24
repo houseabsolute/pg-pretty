@@ -1,9 +1,9 @@
-use serde::{Deserialize, Deserializer};
-
 // The libpg_query library doesn't expose these flags. See
 // https://github.com/lfittl/libpg_query/issues/77.
+use bitflags_serde_int::Deserialize_bitflags_int;
 
 bitflags! {
+    #[derive(Deserialize_bitflags_int)]
     pub struct FrameOptions: u32 {
         const FRAMEOPTION_NONDEFAULT = 0x00001 ; /* any specified? */
         const FRAMEOPTION_RANGE = 0x00002 ; /* RANGE behavior */
@@ -34,76 +34,5 @@ bitflags! {
 impl Default for FrameOptions {
     fn default() -> FrameOptions {
         FrameOptions::FRAMEOPTION_DEFAULTS
-    }
-}
-
-impl<'de> Deserialize<'de> for FrameOptions {
-    fn deserialize<D>(deserializer: D) -> Result<FrameOptions, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_u32(FrameOptionsVisitor)
-    }
-}
-
-use serde::de::{self, Visitor};
-use std::fmt;
-
-struct FrameOptionsVisitor;
-
-impl FrameOptionsVisitor {
-    fn new_frame_options<E>(value: u32) -> Result<FrameOptions, E>
-    where
-        E: de::Error,
-    {
-        match FrameOptions::from_bits(value) {
-            Some(fo) => Ok(fo),
-            None => Err(E::custom(format!(
-                "invalid bitmask for frame options: {:#034b}",
-                value
-            ))),
-        }
-    }
-}
-
-impl<'de> Visitor<'de> for FrameOptionsVisitor {
-    type Value = FrameOptions;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("an unsigned 64-bit integer")
-    }
-
-    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        if value > u32::MAX.into() {
-            Err(E::custom(format!("u32 out of range: {}", value)))
-        } else {
-            Self::new_frame_options(value as u32)
-        }
-    }
-
-    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        if value < u32::MIN.into() {
-            Err(E::custom(format!("u32 out of range: {}", value)))
-        } else {
-            Self::new_frame_options(value as u32)
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json;
-
-    #[test]
-    fn test_deserialize() {
-        let f: FrameOptions = serde_json::from_str("530").unwrap();
-        assert_eq!(f.bits, FrameOptions::FRAMEOPTION_DEFAULTS.bits);
     }
 }
