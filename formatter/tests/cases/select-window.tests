@@ -1,0 +1,175 @@
+++++
+SELECT WINDOW
+----
+SELECT sum(salary) OVER w, avg(salary) OVER w
+  FROM empsalary
+  WINDOW w AS (PARTITION BY depname ORDER BY salary DESC)
+----
+SELECT sum(salary) OVER w, avg(salary) OVER w
+FROM empsalary
+WINDOW w AS ( PARTITION BY depname ORDER BY salary DESC )
+----
+
+++++
+SELECT WINDOW with long clause
+----
+SELECT sum(salary) OVER w, avg(salary) OVER w
+  FROM empsalary
+  WINDOW w AS (PARTITION BY depname ORDER BY salary DESC RANGE BETWEEN UNBOUNDED PRECEDING       AND UNBOUNDED FOLLOWING)
+----
+SELECT sum(salary) OVER w, avg(salary) OVER w
+FROM empsalary
+WINDOW w AS (
+           PARTITION BY depname
+           ORDER BY salary DESC
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       )
+----
+
+++++
+SELECT multiple WINDOW
+----
+SELECT sum(salary) OVER w, avg(salary) OVER y
+  FROM empsalary
+  WINDOW w AS (PARTITION BY depname ORDER BY salary DESC),y AS ( PARTITION BY depname ORDER BY salary DESC )
+----
+SELECT sum(salary) OVER w, avg(salary) OVER y
+FROM empsalary
+WINDOW w AS ( PARTITION BY depname ORDER BY salary DESC ),
+       y AS ( PARTITION BY depname ORDER BY salary DESC )
+----
+
+++++
+SELECT multiple WINDOW with long clauses
+----
+SELECT sum(salary) OVER w, avg(salary) OVER w
+  FROM empsalary
+  WINDOW w AS (PARTITION BY depname ORDER BY salary DESC RANGE BETWEEN UNBOUNDED PRECEDING       AND UNBOUNDED FOLLOWING),  y AS (PARTITION BY depname ORDER BY salary DESC RANGE BETWEEN UNBOUNDED PRECEDING       AND UNBOUNDED FOLLOWING)
+----
+SELECT sum(salary) OVER w, avg(salary) OVER w
+FROM empsalary
+WINDOW w AS (
+           PARTITION BY depname
+           ORDER BY salary DESC
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ),
+       y AS (
+           PARTITION BY depname
+           ORDER BY salary DESC
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       )
+----
+
+++++
+SELECT WINDOW with RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+----
+SELECT
+    product_name,
+    group_name,
+    price,
+    LAST_VALUE (price) OVER (
+        PARTITION BY group_name
+        ORDER BY
+            price RANGE BETWEEN UNBOUNDED PRECEDING
+        AND UNBOUNDED FOLLOWING
+    ) AS highest_price_per_group
+FROM
+    products
+INNER JOIN product_groups USING (group_id)
+----
+SELECT product_name,
+       group_name,
+       price,
+       last_value(price) OVER (
+           PARTITION BY group_name
+           ORDER BY price
+           RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS highest_price_per_group
+FROM products
+     JOIN product_groups USING (group_id)
+----
+
+++++
+SELECT x OVER with BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+----
+SELECT
+    product_name,
+    group_name,
+    price,
+    LAST_VALUE (price) OVER (
+        PARTITION BY group_name
+        ORDER BY
+            price RANGE BETWEEN CURRENT ROW
+        AND UNBOUNDED FOLLOWING
+    ) AS highest_price_per_group
+FROM
+    products
+INNER JOIN product_groups USING (group_id)
+----
+SELECT product_name,
+       group_name,
+       price,
+       last_value(price) OVER (
+           PARTITION BY group_name
+           ORDER BY price
+           RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+       ) AS highest_price_per_group
+FROM products
+     JOIN product_groups USING (group_id)
+----
+
+++++
+SELECT x OVER with BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+----
+SELECT
+    product_name,
+    group_name,
+    price,
+    LAST_VALUE (price) OVER (
+        PARTITION BY group_name
+        ORDER BY
+            price RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS highest_price_per_group
+FROM
+    products
+INNER JOIN product_groups USING (group_id)
+----
+SELECT product_name,
+       group_name,
+       price,
+       last_value(price) OVER (
+           PARTITION BY group_name
+           ORDER BY price
+           RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+       ) AS highest_price_per_group
+FROM products
+     JOIN product_groups USING (group_id)
+----
+
+++++
+SELECT x OVER with BETWEEN PRECEDING 2 and FOLLOWING 2*2
+----
+SELECT
+    product_name,
+    group_name,
+    price,
+    LAST_VALUE (price) OVER (
+        PARTITION BY group_name
+        ORDER BY
+            price ROWS BETWEEN 2 PRECEDING and 2*2 FOLLOWING
+    ) AS highest_price_per_group
+FROM
+    products
+INNER JOIN product_groups USING (group_id)
+----
+SELECT product_name,
+       group_name,
+       price,
+       last_value(price) OVER (
+           PARTITION BY group_name
+           ORDER BY price
+           ROWS BETWEEN 2 PRECEDING AND 2 * 2 FOLLOWING
+       ) AS highest_price_per_group
+FROM products
+     JOIN product_groups USING (group_id)
+----

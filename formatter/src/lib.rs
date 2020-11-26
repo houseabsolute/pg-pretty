@@ -1,4 +1,4 @@
-use pg_pretty_parser::ast::*;
+use pg_pretty_parser::{ast::*, flags::FrameOptions};
 use scopeguard::guard;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -28,6 +28,8 @@ pub enum Error {
     RangeFunctionDoesNotHaveAnyFunctions,
     #[error("range function's list of func calls contains a non-FuncCall node")]
     RangeFunctionHasNonFuncCallFunction,
+    #[error("frame options specified {} but did not contain a value", opt)]
+    FrameOptionsValueWithoutOffset { opt: String },
 }
 
 #[derive(Debug, PartialEq)]
@@ -98,6 +100,7 @@ impl Formatter {
             Node::StringStruct(s) => Ok(self.format_string(&s.str)),
             Node::SubLink(s) => self.format_sub_link(&s),
             Node::TypeCast(t) => self.format_type_cast(&t),
+            Node::WindowDef(w) => self.format_window_def(&w, 0),
             _ => Err(Error::UnexpectedNode {
                 node: node.to_string(),
                 func: "format_node".to_string(),
@@ -176,8 +179,12 @@ impl Formatter {
         if let Some(h) = &s.having_clause {
             select.push_str(&self.format_having_clause(h)?);
         }
+        if let Some(w) = &s.window_clause {
+            select.push_str(&self.format_window_clause(w)?);
+        }
         if let Some(o) = &s.sort_clause {
             select.push_str(&self.format_order_by_clause(o)?);
+            select.push('\n');
         }
         select.push_str(&self.maybe_format_limit(s)?);
         if let Some(l) = &s.locking_clause {
@@ -215,7 +222,7 @@ impl Formatter {
                         })
                         .collect::<Result<Vec<_>, _>>()
                 };
-                prefix = self.one_line_or_many(&prefix, false, true, 0, maker)?;
+                prefix = self.one_line_or_many(&prefix, false, true, true, 0, maker)?;
                 if prefix.contains('\n') {
                     prefix.push('\n');
                 } else {
@@ -242,13 +249,13 @@ impl Formatter {
         if can_be_one_line {
             return Ok(format!(
                 "{}\n",
-                self.one_line_or_many(&prefix, true, false, 0, maker)?
+                self.one_line_or_many(&prefix, true, false, true, 0, maker)?
             ));
         }
 
         Ok(format!(
             "{}\n",
-            self.many_lines(&prefix, true, false, maker)?
+            self.many_lines(&prefix, true, false, true, maker)?
         ))
     }
 
@@ -384,7 +391,7 @@ impl Formatter {
             // something like "foo IN (1, 2)", but could it also be something
             // else that shouldn't be joined by commas?
             OneOrManyNodes::Many(r) => {
-                e.push(self.one_line_or_many("", false, true, 0, |f| f.formatted_list(&r))?)
+                e.push(self.one_line_or_many("", false, true, true, 0, |f| f.formatted_list(&r))?)
             }
         }
         if self.a_expr_depth > 1 {
@@ -478,7 +485,7 @@ impl Formatter {
     //#[trace]
     fn format_not_expr(&mut self, b: &BoolExpr) -> R {
         let maker = |f: &mut Self| Ok(vec![f.format_node(&b.args[0])?]);
-        self.one_line_or_many("NOT ", false, true, 0, maker)
+        self.one_line_or_many("NOT ", false, true, false, 0, maker)
     }
 
     //#[trace]
@@ -502,6 +509,7 @@ impl Formatter {
         func.push('(');
 
         let mut arg_is_simple = true;
+
         let mut args = String::new();
         if f.agg_distinct {
             arg_is_simple = false;
@@ -535,12 +543,6 @@ impl Formatter {
             args.push_str(&self.format_node(fil)?);
         }
 
-        if let Some(w) = &f.over {
-            arg_is_simple = false;
-            args.push_str(" OVER ");
-            args.push_str(&self.format_window_def(&w)?);
-        }
-
         // XXX need to handle f.agg_within_group
 
         if !arg_is_simple {
@@ -553,15 +555,154 @@ impl Formatter {
 
         func.push(')');
 
+        if let Some(WindowDefWrapper::WindowDef(w)) = &f.over {
+            func.push_str(" OVER ");
+            let current_indent = if func.contains('\n') { 0 } else { func.len() };
+            func.push_str(&self.format_window_def(&w, current_indent)?);
+        }
+
         Ok(func)
     }
 
-    // XXX - to be implemented
     //#[trace]
-    fn format_window_def(&mut self, _w: &WindowDefWrapper) -> R {
-        Ok("WINDOW".to_string())
+    fn format_window_def(&mut self, w: &WindowDef, current_indent: usize) -> R {
+        let mut window = String::new();
+        // XXX - should we look at the context to determine whether we should
+        // allow a name or refname? It seems like name isn't allowed in SELECT
+        // clause (?) and refname is not allowed in WINDOW clause (?).
+        if let Some(n) = &w.name {
+            window.push_str(n);
+        }
+
+        let maker = |f: &mut Self| {
+            let mut items: Vec<String> = vec![];
+            if let Some(n) = &w.refname {
+                items.push(n.clone());
+            }
+            if let Some(p) = &w.partition_clause {
+                items.push(f.format_partition_clause(&window, &p, current_indent)?);
+            }
+            if let Some(ob) = &w.order_clause {
+                items.push(f.format_order_by_clause(&ob)?);
+            }
+            if w.frame_options != FrameOptions::DEFAULTS {
+                items.push(f.format_frame_options(w)?);
+            }
+
+            Ok(items)
+        };
+
+        let full_indent = if window.is_empty() {
+            current_indent
+        } else {
+            // 4 for " AS "
+            current_indent + window.len() + 4
+        };
+
+        let rest = self.one_line_or_many("", false, true, false, full_indent, maker)?;
+        if !rest.is_empty() {
+            if !window.is_empty() {
+                window.push_str(" AS ");
+            }
+            window.push_str(&rest);
+        }
+
+        Ok(window)
     }
 
+    //#[trace]
+    fn format_partition_clause(&mut self, w: &str, p: &[Node], current_indent: usize) -> R {
+        self.one_line_or_many(
+            "PARTITION BY ",
+            false,
+            false,
+            true,
+            current_indent + w.len(),
+            |f| f.formatted_list(p),
+        )
+    }
+
+    //#[trace]
+    fn format_frame_options(&mut self, w: &WindowDef) -> R {
+        let flags = &w.frame_options;
+        let mut options: Vec<&str> = vec![];
+        // XXX - I'm not sure if it's possible to have options where neither
+        // of these are true.
+        if flags.contains(FrameOptions::RANGE) {
+            options.push("RANGE");
+        } else if flags.contains(FrameOptions::ROWS) {
+            options.push("ROWS");
+        }
+        if flags.contains(FrameOptions::BETWEEN) {
+            options.push("BETWEEN");
+        }
+
+        if flags.contains(FrameOptions::START_UNBOUNDED_PRECEDING) {
+            options.push("UNBOUNDED PRECEDING");
+        }
+        if flags.contains(FrameOptions::START_UNBOUNDED_FOLLOWING) {
+            options.push("UNBOUNDED FOLLOWING");
+        }
+        if flags.contains(FrameOptions::START_CURRENT_ROW) {
+            options.push("CURRENT ROW");
+        }
+        let mut range: Vec<String> = vec![];
+        if flags.contains(FrameOptions::START_VALUE_PRECEDING)
+            | flags.contains(FrameOptions::START_VALUE_FOLLOWING)
+        {
+            let direction = if flags.contains(FrameOptions::START_VALUE_PRECEDING) {
+                "PRECEDING"
+            } else {
+                "FOLLOWING"
+            };
+            if let Some(o) = &w.start_offset {
+                range.push(self.format_node(&*o)?);
+            } else {
+                return Err(Error::FrameOptionsValueWithoutOffset {
+                    opt: format!("START {}", direction),
+                });
+            }
+            range.push(direction.to_string());
+        }
+
+        if flags.intersects(FrameOptions::START) && flags.intersects(FrameOptions::END) {
+            range.push("AND".to_string());
+        }
+
+        if flags.contains(FrameOptions::END_UNBOUNDED_PRECEDING) {
+            range.push("UNBOUNDED PRECEDING".to_string());
+        }
+        if flags.contains(FrameOptions::END_UNBOUNDED_FOLLOWING) {
+            range.push("UNBOUNDED FOLLOWING".to_string());
+        }
+        if flags.contains(FrameOptions::END_CURRENT_ROW) {
+            range.push("CURRENT ROW".to_string());
+        }
+        if flags.contains(FrameOptions::END_VALUE_PRECEDING)
+            | flags.contains(FrameOptions::END_VALUE_FOLLOWING)
+        {
+            let direction = if flags.contains(FrameOptions::END_VALUE_PRECEDING) {
+                "PRECEDING"
+            } else {
+                "FOLLOWING"
+            };
+            if let Some(o) = &w.end_offset {
+                range.push(self.format_node(&*o)?);
+            } else {
+                return Err(Error::FrameOptionsValueWithoutOffset {
+                    opt: format!("END {}", direction),
+                });
+            }
+            range.push(direction.to_string());
+        }
+
+        let joined = &range.join(" ");
+        options.push(joined);
+
+        Ok(options.join(" "))
+    }
+
+    //#[trace]
     fn maybe_format_limit(&mut self, s: &SelectStmt) -> R {
         let mut limit = String::new();
         if let Some(c) = &s.limit_count {
@@ -671,7 +812,7 @@ impl Formatter {
             }
         };
 
-        self.one_line_or_many(prefix, false, true, 0, |f| f.formatted_list(&r.args))
+        self.one_line_or_many(prefix, false, true, true, 0, |f| f.formatted_list(&r.args))
     }
 
     //#[trace]
@@ -725,7 +866,7 @@ impl Formatter {
                 .collect::<Vec<String>>())
         };
 
-        formatter.one_line_or_many(&grouping_set, false, true, 0, maker)
+        formatter.one_line_or_many(&grouping_set, false, true, true, 0, maker)
     }
 
     //#[trace]
@@ -886,7 +1027,7 @@ impl Formatter {
     fn format_group_by_clause(&mut self, g: &[Node]) -> R {
         Ok(format!(
             "{}\n",
-            self.one_line_or_many("GROUP BY ", false, false, 0, |f| f.formatted_list(g))?
+            self.one_line_or_many("GROUP BY ", false, false, true, 0, |f| f.formatted_list(g))?
         ))
     }
 
@@ -901,6 +1042,13 @@ impl Formatter {
         having.push('\n');
 
         Ok(having)
+    }
+
+    fn format_window_clause(&mut self, w: &[Node]) -> R {
+        Ok(format!(
+            "{}\n",
+            self.one_line_or_many("WINDOW ", false, false, true, 0, |f| f.formatted_list(w))?
+        ))
     }
 
     //#[trace]
@@ -1011,10 +1159,7 @@ impl Formatter {
             Ok(order_by)
         };
 
-        Ok(format!(
-            "{}\n",
-            self.one_line_or_many("ORDER BY ", false, false, 0, maker)?
-        ))
+        self.one_line_or_many("ORDER BY ", false, false, true, 0, maker)
     }
 
     //#[trace]
@@ -1119,7 +1264,7 @@ impl Formatter {
                 .collect::<Result<Vec<_>, _>>()
         };
 
-        let mut range_func = self.one_line_or_many(&prefix, false, add_parens, 0, maker)?;
+        let mut range_func = self.one_line_or_many(&prefix, false, add_parens, true, 0, maker)?;
         if rf.alias.is_some() || rf.coldeflist.is_some() {
             range_func.push_str(" AS ");
         }
@@ -1168,7 +1313,7 @@ impl Formatter {
                 .collect::<Result<Vec<_>, _>>()
         };
 
-        self.one_line_or_many("", false, true, last_line_len, maker)
+        self.one_line_or_many("", false, true, true, last_line_len, maker)
     }
 
     fn format_column_def(&mut self, def: &ColumnDef) -> R {
@@ -1186,6 +1331,7 @@ impl Formatter {
         prefix: &str,
         indent_prefix: bool,
         add_parens: bool,
+        join_with_comma: bool,
         current_indent: usize,
         mut items_maker: F,
     ) -> R
@@ -1198,6 +1344,9 @@ impl Formatter {
         }
 
         let items = items_maker(self)?;
+        if items.is_empty() {
+            return Ok(String::new());
+        }
 
         let mut parens: [&str; 2] = ["", ""];
         if add_parens {
@@ -1211,14 +1360,24 @@ impl Formatter {
         }
 
         one_line.push_str(parens[0]);
-        one_line.push_str(&items.join(", "));
+        if join_with_comma {
+            one_line.push_str(&items.join(", "));
+        } else {
+            one_line.push_str(&items.join(" "));
+        }
         one_line.push_str(parens[1]);
 
         if !one_line.contains('\n') && self.fits_on_one_line(&one_line, current_indent) {
             return Ok(one_line);
         }
 
-        self.many_lines(prefix, indent_prefix, add_parens, items_maker)
+        self.many_lines(
+            prefix,
+            indent_prefix,
+            add_parens,
+            join_with_comma,
+            items_maker,
+        )
     }
 
     //#[trace(disable(items_maker))]
@@ -1227,6 +1386,7 @@ impl Formatter {
         prefix: &str,
         indent_prefix: bool,
         add_parens: bool,
+        join_with_comma: bool,
         mut items_maker: F,
     ) -> R
     where
@@ -1262,7 +1422,9 @@ impl Formatter {
             }
             many.push_str(i);
             if n < last_idx {
-                many.push(',');
+                if join_with_comma {
+                    many.push(',');
+                }
                 many.push('\n');
             }
         }
