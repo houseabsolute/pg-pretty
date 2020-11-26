@@ -16,6 +16,8 @@ pub enum Error {
     MalformedInfixExpression { e: String },
     #[error("join type is {} but there is no Pg keyword for this", jt)]
     InexpressibleJoinType { jt: String },
+    #[error("join type is inner but is not natual and has no qualifiers or using clause")]
+    InvalidInnerJoin,
     #[error(
         "cannot mix join strategies but found {} and {} in the FROM clause",
         strat1,
@@ -934,10 +936,7 @@ impl Formatter {
         e.push_str(&self.format_from_element(&j.larg, is_first)?);
         e.push('\n');
         e.push_str(&" ".repeat(self.current_indent()));
-        if j.is_natural {
-            e.push_str("NATURAL ");
-        }
-        e.push_str(self.join_type(&j.jointype)?);
+        e.push_str(&self.join_type(j)?);
         e.push(' ');
         e.push_str(&self.format_from_element(&j.rarg, is_first)?);
 
@@ -968,14 +967,30 @@ impl Formatter {
         Ok(e)
     }
 
-    fn join_type(&self, jt: &JoinType) -> Result<&str, Error> {
-        match jt {
-            JoinType::JoinInner => Ok("JOIN"),
-            JoinType::JoinLeft => Ok("LEFT OUTER JOIN"),
-            JoinType::JoinRight => Ok("RIGHT OUTER JOIN"),
-            JoinType::JoinFull => Ok("FULL OUTER JOIN"),
-            _ => Err(Error::InexpressibleJoinType { jt: jt.to_string() }),
+    fn join_type(&self, j: &JoinExpr) -> Result<String, Error> {
+        let jt = match &j.jointype {
+            JoinType::JoinInner => {
+                if j.quals.is_some() || j.using_clause.is_some() || j.is_natural {
+                    "JOIN"
+                } else {
+                    return Ok("CROSS JOIN".to_string());
+                }
+            }
+            JoinType::JoinLeft => "LEFT OUTER JOIN",
+            JoinType::JoinRight => "RIGHT OUTER JOIN",
+            JoinType::JoinFull => "FULL OUTER JOIN",
+            _ => {
+                return Err(Error::InexpressibleJoinType {
+                    jt: j.jointype.to_string(),
+                })
+            }
+        };
+
+        if j.is_natural {
+            return Ok(format!("NATURAL {}", jt));
         }
+
+        Ok(jt.to_string())
     }
 
     //#[trace]
@@ -1480,11 +1495,6 @@ impl Formatter {
         self.push_indent(self.current_indent() + self.indent_width);
     }
 
-    #[cfg(test)]
-    fn push_indent_by(&mut self, by: usize) {
-        self.push_indent(self.current_indent() + by);
-    }
-
     fn push_indent(&mut self, indent: usize) {
         self.indents.push(indent);
     }
@@ -1532,428 +1542,5 @@ impl Formatter {
             }
         }
         String::from(r)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use anyhow::Result;
-    use spectral::prelude::*;
-    #[test]
-    fn test_maybe_quote() {
-        assert_that(&Formatter::maybe_quote("foo")).is_equal_to("foo".to_string());
-        assert_that(&Formatter::maybe_quote("Foo")).is_equal_to(String::from(r#""Foo""#));
-        assert_that(&Formatter::maybe_quote("fooBar")).is_equal_to(String::from(r#""fooBar""#));
-    }
-
-    #[test]
-    fn test_join_type() -> Result<()> {
-        let f = Formatter::new();
-        assert_that(&f.join_type(&JoinType::JoinInner)?).is_equal_to("JOIN");
-        assert_that(&f.join_type(&JoinType::JoinLeft)?).is_equal_to("LEFT OUTER JOIN");
-        assert_that(&f.join_type(&JoinType::JoinRight)?).is_equal_to("RIGHT OUTER JOIN");
-        assert_that(&f.join_type(&JoinType::JoinFull)?).is_equal_to("FULL OUTER JOIN");
-
-        let res = f.join_type(&JoinType::JoinSemi);
-        assert_that(&res).is_err();
-        assert_that(&res.unwrap_err().to_string()).is_equal_to(String::from(
-            "join type is JoinSemi but there is no Pg keyword for this",
-        ));
-        Ok(())
-    }
-
-    struct TestCase {
-        name: String,
-        node: Node,
-        expect: String,
-        indent: usize,
-    }
-    type FormatFn = fn(&mut Formatter, Node) -> R;
-
-    macro_rules! case {
-        ( $name:literal, $node:expr, $expect:literal $(,)? ) => {
-            case!($name, $node, $expect, 0);
-        };
-        ( $name:literal, $node:expr, $expect:literal, $indent:literal $(,)? ) => {
-            TestCase {
-                name: $name.to_string(),
-                node: $node,
-                expect: $expect.to_string(),
-                indent: $indent,
-            }
-        };
-    }
-
-    macro_rules! range_var {
-        ( $relname:literal $(,)? ) => {
-            make_range_var(None, None, $relname, None)
-        };
-        ( $relname:literal AS $alias:literal ) => {
-            make_range_var(None, None, $relname, Some($alias))
-        };
-        ( $catalogname:literal, $relname:literal $(,)? ) => {
-            make_range_var(None, Some($catalogname), $relname, None)
-        };
-        ( $catalogname:literal, $relname:literal AS $alias:literal ) => {
-            make_range_var(None, Some($catalogname), $relname, Some($alias))
-        };
-        ( $schemaname:literal, $catalogname:literal, $relname:literal $(,)? ) => {
-            make_range_var(Some($schemaname), Some($catalogname), $relname, None)
-        };
-        ( $schemaname:literal, $catalogname:literal, $relname:literal AS $alias:literal ) => {
-            make_range_var(
-                Some($schemaname),
-                Some($catalogname),
-                $relname,
-                Some($alias),
-            )
-        };
-    }
-
-    macro_rules! join_expr {
-        ( $larg:expr, $($join_type:ident)*, $rarg:expr, ON, $lon:literal = $ron:literal $(,)? ) => {
-            {
-                let (jt, n) = _join_type!($($join_type)*);
-                make_join_expr(
-                    jt,
-                    n,
-                    $larg,
-                    $rarg,
-                    None,
-                    Some(($lon.split(".").collect(), "=", $ron.split(".").collect())),
-                    None,
-                )
-            }
-        };
-        ( $larg:expr, $($join_type:ident)*, $rarg:expr, USING, $($using:literal),+ $(,)? ) => {
-            {
-                let (jt, n) = _join_type!($($join_type)*);
-                make_join_expr(
-                    jt,
-                    n,
-                    $larg,
-                    $rarg,
-                    Some(vec![$($using),+]),
-                    None,
-                    None,
-                )
-            }
-        };
-    }
-
-    macro_rules! _join_type {
-        (JOIN) => {
-            (JoinType::JoinInner, false)
-        };
-        (NATURAL JOIN) => {
-            (JoinType::JoinInner, true)
-        };
-        (LEFT OUTER JOIN) => {
-            (JoinType::JoinLeft, false)
-        };
-        (RIGHT OUTER JOIN) => {
-            (JoinType::JoinRight, false)
-        };
-    }
-
-    fn run_tests(tests: Vec<TestCase>, format_fn: FormatFn) -> Result<()> {
-        for t in tests {
-            let mut f = Formatter::new();
-            f.push_indent_by(t.indent);
-            let formatted = format_fn(&mut f, t.node)?;
-            assert_that(&formatted).named(&t.name).is_equal_to(t.expect);
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_range_var() -> Result<()> {
-        let tests: Vec<TestCase> = vec![
-            case!("table", range_var!("people"), "people"),
-            case!(
-                "table with alias",
-                range_var!("people" AS "persons"),
-                "people AS persons",
-            ),
-            case!(
-                "schema & table",
-                range_var!("some_schema", "people"),
-                "some_schema.people",
-            ),
-            case!(
-                "catalog, schema, & table",
-                range_var!("some_catalog", "some_schema", "people"),
-                "some_catalog.some_schema.people",
-            ),
-            case!("uc table", range_var!("People"), r#""People""#),
-            case!(
-                "uc schema & table",
-                range_var!("Schema", "People"),
-                r#""Schema"."People""#,
-            ),
-            case!(
-                "uc catalog, schema, & table",
-                range_var!("Cat", "Schema", "People"),
-                r#""Cat"."Schema"."People""#,
-            ),
-            case!(
-                "catalog, schema, & table with alias",
-                range_var!("cata", "mySchema", "People" AS "Persons"),
-                r#"cata."mySchema"."People" AS "Persons""#,
-            ),
-        ];
-        run_tests(tests, |f, n| {
-            let rv = match n {
-                Node::RangeVar(rv) => rv,
-                _ => panic!("Got a something that isn't a range var from make_range_var()!"),
-            };
-            Ok(f.format_range_var(&rv))
-        })
-    }
-
-    #[test]
-    fn test_from_element() -> Result<()> {
-        let tests: Vec<TestCase> = vec![
-            case!(
-                "inner join ON",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "table1\nJOIN table2\n    ON table1.foo = table2.foo",
-            ),
-            case!(
-                "inner join ON with indent",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "    table1\n    JOIN table2\n        ON table1.foo = table2.foo",
-                4,
-            ),
-            case!(
-                "left outer join ON",
-                join_expr!(
-                    range_var!("table1"),
-                    LEFT OUTER JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "table1\nLEFT OUTER JOIN table2\n    ON table1.foo = table2.foo",
-            ),
-            case!(
-                "right outer join ON",
-                join_expr!(
-                    range_var!("table1"),
-                    RIGHT OUTER JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "table1\nRIGHT OUTER JOIN table2\n    ON table1.foo = table2.foo",
-            ),
-            case!(
-                "inner join USING",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    USING,
-                    "foo",
-                ),
-                "table1\nJOIN table2 USING (foo)",
-            ),
-            case!(
-                "inner join USING with indent",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    USING,
-                    "foo"
-                ),
-                "    table1\n    JOIN table2 USING (foo)",
-                4,
-            ),
-        ];
-        run_tests(tests, |f, n| f.format_from_element(&n, false))?;
-
-        let tests: Vec<TestCase> = vec![
-            case!(
-                "inner join ON",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "table1\nJOIN table2\n    ON table1.foo = table2.foo",
-            ),
-            case!(
-                "inner join ON with indent",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "    table1\n    JOIN table2\n        ON table1.foo = table2.foo",
-                4,
-            ),
-            case!(
-                "left outer join ON",
-                join_expr!(
-                    range_var!("table1"),
-                    LEFT OUTER JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "table1\nLEFT OUTER JOIN table2\n    ON table1.foo = table2.foo",
-            ),
-            case!(
-                "right outer join ON",
-                join_expr!(
-                    range_var!("table1"),
-                    RIGHT OUTER JOIN,
-                    range_var!("table2"),
-                    ON,
-                    "table1.foo" = "table2.foo",
-                ),
-                "table1\nRIGHT OUTER JOIN table2\n    ON table1.foo = table2.foo",
-            ),
-            case!(
-                "inner join USING",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    USING,
-                    "foo",
-                ),
-                "table1\nJOIN table2\n    USING (foo)",
-            ),
-            case!(
-                "inner join USING with indent",
-                join_expr!(
-                    range_var!("table1"),
-                    JOIN,
-                    range_var!("table2"),
-                    USING,
-                    "foo",
-                ),
-                "    table1\n    JOIN table2\n        USING (foo)",
-                4,
-            ),
-        ];
-        run_tests(tests, |f, n| {
-            f.max_line_len = 20;
-            f.format_from_element(&n, false)
-        })
-    }
-
-    fn make_range_var(c: Option<&str>, s: Option<&str>, r: &str, a: Option<&str>) -> Node {
-        let alias = match a {
-            Some(a) => Some(AliasWrapper::Alias(Alias {
-                aliasname: a.to_string(),
-                colnames: None,
-            })),
-            None => None,
-        };
-        let catalogname = match c {
-            Some(c) => Some(c.to_string()),
-            None => None,
-        };
-        let schemaname = match s {
-            Some(s) => Some(s.to_string()),
-            None => None,
-        };
-
-        Node::RangeVar(RangeVar {
-            catalogname,
-            schemaname,
-            relname: r.to_string(),
-            inh: false,
-            relpersistence: None,
-            alias,
-            location: None,
-        })
-    }
-
-    fn make_join_expr(
-        jointype: JoinType,
-        is_natural: bool,
-        l: Node,
-        r: Node,
-        u: Option<Vec<&str>>,
-        q: Option<(Vec<&str>, &str, Vec<&str>)>,
-        a: Option<String>,
-    ) -> Node {
-        let using_clause = match u {
-            Some(u) => Some(
-                u.iter()
-                    .map(|n| StringStructWrapper::StringStruct(StringStruct { str: n.to_string() }))
-                    .collect(),
-            ),
-            None => None,
-        };
-
-        let quals = match q {
-            Some(q) => {
-                let opl = q.0;
-                let op = q.1;
-                let opr = q.2;
-                Some(Box::new(Node::AExpr(AExpr {
-                    kind: AExprKind::AExprOp,
-                    name: Some(vec![Node::StringStruct(StringStruct {
-                        str: op.to_string(),
-                    })]),
-                    lexpr: Box::new(make_column_ref(opl)),
-                    rexpr: OneOrManyNodes::One(Box::new(make_column_ref(opr))),
-                    location: None,
-                })))
-            }
-            None => None,
-        };
-
-        let alias = match a {
-            Some(a) => Some(AliasWrapper::Alias(Alias {
-                aliasname: a,
-                colnames: None,
-            })),
-            None => None,
-        };
-
-        Node::JoinExpr(JoinExpr {
-            jointype,
-            is_natural,
-            larg: Box::new(l),
-            rarg: Box::new(r),
-            using_clause,
-            quals,
-            alias,
-            rtindex: None,
-        })
-    }
-
-    fn make_column_ref(names: Vec<&str>) -> Node {
-        let fields = names
-            .iter()
-            .map(|n| ColumnRefField::StringStruct(StringStruct { str: n.to_string() }))
-            .collect();
-        Node::ColumnRef(ColumnRef {
-            fields,
-            location: None,
-        })
     }
 }
