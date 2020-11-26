@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::fmt;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -11,6 +12,18 @@ pub struct ParseError {
     pub context: Option<String>,
 }
 
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let e = if let Some(m) = &self.message {
+            m.clone()
+        } else {
+            "no message returned from parse".to_string()
+        };
+
+        write!(f, "{}", e)
+    }
+}
+
 #[derive(Debug, Error, PartialEq, Serialize)]
 pub enum PGQueryError {
     #[error("could not parse C string into Rust UTF-8 string")]
@@ -19,7 +32,7 @@ pub enum PGQueryError {
     JsonParse(String, String),
     #[error("could not convert query string to C string")]
     QueryToCString,
-    #[error("libpg_query returned an error from parsing the string")]
+    #[error("libpg_query returned an error from parsing the string: {}", .0)]
     PGParseError(ParseError),
 }
 
