@@ -233,45 +233,15 @@ impl Formatter {
             }
         }
 
-        let mut can_be_one_line = !prefix.contains('\n');
-        if can_be_one_line {
-            for t in tl {
-                if self.is_complex_target_element(t)? {
-                    can_be_one_line = false;
-                    break;
-                }
-            }
-        }
-
         let maker = |f: &mut Self| {
             tl.iter()
                 .map(|t| f.format_target_element(t))
                 .collect::<Result<Vec<_>, _>>()
         };
-        if can_be_one_line {
-            return Ok(format!(
-                "{}\n",
-                self.one_line_or_many(&prefix, true, false, true, 0, maker)?
-            ));
-        }
-
-        Ok(format!(
+        return Ok(format!(
             "{}\n",
-            self.many_lines(&prefix, true, false, true, maker)?
-        ))
-    }
-
-    fn is_complex_target_element(&mut self, t: &Node) -> Result<bool, Error> {
-        match &t {
-            Node::ResTarget(rt) => match *rt.val {
-                Node::SubLink(_) => Ok(true),
-                _ => Ok(false),
-            },
-            _ => Err(Error::UnexpectedNode {
-                node: t.to_string(),
-                func: "is_complex_target_element".to_string(),
-            }),
-        }
+            self.one_line_or_many(&prefix, true, false, true, 0, maker)?
+        ));
     }
 
     //#[trace]
