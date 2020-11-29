@@ -62,6 +62,16 @@ pub enum DefElemArgs {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
+pub enum IndirectionListElement {
+    #[serde(rename = "A_Indices")]
+    AIndices(AIndices),
+    #[serde(rename = "A_Star")]
+    AStar(AStar),
+    #[serde(rename = "String")]
+    StringStruct(StringStruct),
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
 // The first node should always be a FuncCall and the optional list should
 // only contain ColumnDef nodes.
 pub struct RangeFunctionElement(pub Node, pub Option<Vec<ColumnDefWrapper>>);
@@ -142,9 +152,9 @@ pub struct AIndices {
 #[serde(rename = "A_Indirection")]
 pub struct AIndirection {
     // the thing being selected from
-    pub arg: Option<Box<Node>>, // Node*
+    pub arg: Box<Node>, // Node*
     // subscripts and/or field names and/or *
-    pub indirection: Option<List>, // List*
+    pub indirection: Vec<IndirectionListElement>, // List*
 }
 
 // A_Star - '*' representing all columns of a table or compound field
@@ -2455,12 +2465,12 @@ pub struct InlineCodeBlock {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct InsertStmt {
     // relation to insert into
-    pub relation: Option<RangeVarWrapper>, // RangeVar*
+    pub relation: RangeVarWrapper, // RangeVar*
     // optional: names of the target columns
-    pub cols: Option<List>, // List*
+    pub cols: Option<Vec<ResTargetWrapper>>, // List*
     // the source SELECT/VALUES, or NULL
     #[serde(rename = "selectStmt")]
-    pub select_stmt: Option<Box<Node>>, // Node*
+    pub select_stmt: Option<SelectStmtWrapper>, // Node*
     // ON CONFLICT clause
     #[serde(rename = "onConflictClause")]
     pub on_conflict_clause: Option<OnConflictClauseWrapper>, // OnConflictClause*
@@ -2728,7 +2738,7 @@ pub struct ObjectWithArgs {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct OnConflictClause {
     // DO NOTHING or UPDATE?
-    pub action: Option<OnConflictAction>, // OnConflictAction
+    pub action: OnConflictAction, // OnConflictAction
     // Optional index inference clause
     pub infer: Option<InferClauseWrapper>, // InferClause*
     // the target list (of ResTarget)
@@ -3506,9 +3516,9 @@ pub struct ResTarget {
     // column name or NULL
     pub name: Option<String>, // char*
     // subscripts, field names, and '*', or NIL
-    pub indirection: Option<List>, // List*
+    pub indirection: Option<Vec<IndirectionListElement>>, // List*
     // the value expression to compute or assign
-    pub val: Box<Node>, // Node*
+    pub val: Option<Box<Node>>, // Node*
     // token location, or -1 if unknown
     pub location: Option<i64>, // int
 }
@@ -5982,6 +5992,11 @@ pub enum RangeTblFunctionWrapper {
 #[derive(Debug, Deserialize, PartialEq)]
 pub enum RangeVarWrapper {
     RangeVar(RangeVar),
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub enum ResTargetWrapper {
+    ResTarget(ResTarget),
 }
 
 #[derive(Debug, Deserialize, PartialEq)]

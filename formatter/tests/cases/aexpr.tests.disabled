@@ -1,0 +1,55 @@
+++++
+2 + 3 + 4 + 5 has no parens
+----
+SELECT 2 + 3 + 4 + 5
+----
+SELECT 2 + 3 + 4 + 5
+----
+
+++++
+2 * 3 * 4 * 5 has no parens
+----
+SELECT 2 * 3 * 4 * 5
+----
+SELECT 2 * 3 * 4 * 5
+----
+
+++++
+'a' || 'b' || 'c' || 'd' has no parens
+----
+SELECT 'a' || 'b' || 'c' || 'd'
+----
+SELECT 'a' || 'b' || 'c' || 'd'
+----
+
+++++
+2 * 3 - 4 * 5 has no parens
+----
+SELECT 2 * 3 - 4 * 5
+----
+SELECT 2 * 3 - 4 * 5
+----
+
+++++
+2 * ( 3 - 4 ) * 5 has parens
+----
+SELECT 2 * ( 3 - 4 ) * 5
+----
+SELECT 2 * ( 3 - 4 ) * 5
+----
+
+++++
+2 * 3 + 4 has parens
+----
+SELECT 2 * 3 + 4
+----
+SELECT 2 * 3 + 4
+----
+
+++++
+2 * (3 + 4) has parens
+----
+SELECT 2 * (3 + 4)
+----
+SELECT 2 * ( 3 + 4 )
+----

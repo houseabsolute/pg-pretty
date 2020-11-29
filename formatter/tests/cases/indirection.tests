@@ -1,0 +1,64 @@
+++++
+insert into array element
+----
+INSERT INTO t (foo[2][3][5]) VALUES (1)
+----
+INSERT INTO
+    t (foo[2][3][5])
+VALUES
+    (1)
+----
+
+++++
+insert into composite type element
+----
+INSERT INTO t (foo.bar.baz) VALUES (1)
+----
+INSERT INTO
+    t (foo.bar.baz)
+VALUES
+    (1)
+----
+
+++++
+insert into composite type element with array
+----
+INSERT INTO t (foo.bar[42][7].baz) VALUES (1)
+----
+INSERT INTO
+    t (foo.bar[42][7].baz)
+VALUES
+    (1)
+----
+
+++++
+select from array element
+----
+SELECT x[42]
+----
+SELECT x[42]
+----
+
+++++
+select from composite type
+----
+SELECT x.foo.bar
+----
+SELECT x.foo.bar
+----
+
+++++
+select from mix of indirections
+----
+SELECT x.foo[42][7].baz[0].name
+----
+SELECT x.foo[42][7].baz[0].name
+----
+
+++++
+select from mix of indirections ending in *
+----
+SELECT x.foo[42][7].baz[0].name.*
+----
+SELECT x.foo[42][7].baz[0].name.*
+----

@@ -56,6 +56,7 @@ has _structs_to_wrap => (
     lazy    => 1,
     default => sub {
         {
+            ResTarget    => 1,
             SelectStmt   => 1,
             StringStruct => 1,
         }
@@ -425,11 +426,16 @@ my %type_map = (
 $type_map{$_} = 'Box<Node>' for 'Node*', 'Expr', 'Expr*';
 
 my %overrides = (
-    AExpr          => { rexpr      => 'OneOrManyNodes' },
-    Alias          => { colnames   => 'Option<Vec<StringStruct>>' },
-    ColumnRef      => { fields     => 'Vec<ColumnRefField>' },
-    DefElem        => { arg        => 'DefElemArgs' },
-    Float          => { str        => 'String' },
+    AIndirection => { indirection => 'Vec<IndirectionListElement>' },
+    AExpr        => { rexpr       => 'OneOrManyNodes' },
+    Alias        => { colnames    => 'Option<Vec<StringStruct>>' },
+    ColumnRef    => { fields      => 'Vec<ColumnRefField>' },
+    DefElem      => { arg         => 'DefElemArgs' },
+    Float        => { str         => 'String' },
+    InsertStmt   => {
+        selectStmt => 'Option<SelectStmtWrapper>',
+        cols       => 'Option<Vec<ResTargetWrapper>>',
+    },
     Integer        => { ival       => 'i64' },
     LockingClause  => { lockedRels => 'Option<Vec<RangeVarWrapper>>' },
     RangeFunction  => { functions  => 'Vec<RangeFunctionElement>' },
@@ -437,6 +443,7 @@ my %overrides = (
     RawStmt        => {
         stmt => 'Node',
     },
+    ResTarget  => { indirection => 'Option<Vec<IndirectionListElement>>' },
     SelectStmt => {
         distinctClause => 'Option<Vec<Option<Node>>>',
         valuesLists    => 'Option<Vec<List>>',
@@ -450,25 +457,26 @@ my %overrides = (
 );
 
 my %not_optional = (
-    AConst => [qw( val )],
+    AConst => 'val',
     AExpr  => [
         qw(
             lexpr
             rexpr
             )
     ],
-    Alias                      => [qw( aliasname )],
-    AlterDatabaseStmt          => [qw( options )],
-    AlterDefaultPrivilegesStmt => [qw( options )],
-    AlterDomainStmt            => [qw( typeName )],
-    AlterEnumStmt              => [qw( typeName )],
-    AlterExtensionStmt         => [qw( options )],
-    AlterFunctionStmt          => [qw( options )],
-    AlterOperatorStmt          => [qw( options )],
-    AlterOpFamilyStmt          => [qw( opfamilyname )],
-    AlterRoleStmt              => [qw( options )],
-    AlterSubScriptionStmt      => [qw( options )],
-    BitString                  => [qw( str )],
+    AIndirection               => 'arg',
+    Alias                      => 'aliasname',
+    AlterDatabaseStmt          => 'options',
+    AlterDefaultPrivilegesStmt => 'options',
+    AlterDomainStmt            => 'typeName',
+    AlterEnumStmt              => 'typeName',
+    AlterExtensionStmt         => 'options',
+    AlterFunctionStmt          => 'options',
+    AlterOperatorStmt          => 'options',
+    AlterOpFamilyStmt          => 'opfamilyname',
+    AlterRoleStmt              => 'options',
+    AlterSubScriptionStmt      => 'options',
+    BitString                  => 'str',
     BoolExpr                   => [
         qw(
             boolop
@@ -481,8 +489,8 @@ my %not_optional = (
             typeName
             )
     ],
-    CompositeTypeStmt => [qw( coldeflist )],
-    CopyStmt          => [qw( options )],
+    CompositeTypeStmt => 'coldeflist',
+    CopyStmt          => 'options',
     CreateDomainStmt  => [
         qw(
             domainname
@@ -495,7 +503,7 @@ my %not_optional = (
             vals
             )
     ],
-    CreateExtensionStmt => [qw( options )],
+    CreateExtensionStmt => 'options',
     CreateFunctionStmt  => [
         qw(
             funcname
@@ -503,8 +511,9 @@ my %not_optional = (
             returnType
             )
     ],
-    FuncCall          => [qw( funcname )],
-    FunctionParameter => [qw( argType )],
+    FuncCall          => 'funcname',
+    FunctionParameter => 'argType',
+    InsertStmt        => 'relation',
     JoinExpr          => [
         qw(
             jointype
@@ -512,8 +521,9 @@ my %not_optional = (
             rarg
             )
     ],
-    LockingClause    => [qw( strength )],
-    RangeSubselect   => [qw( subquery )],
+    LockingClause    => 'strength',
+    OnConflictClause => 'action',
+    RangeSubselect   => 'subquery',
     RangeTableSample => [
         qw(
             relation
@@ -521,9 +531,8 @@ my %not_optional = (
             args
             )
     ],
-    RangeVar  => [qw( relname )],
-    ResTarget => [qw( val )],
-    RowExpr   => [
+    RangeVar => 'relname',
+    RowExpr  => [
         qw(
             args
             row_format
@@ -548,10 +557,12 @@ my %not_optional = (
             typeName
             )
     ],
-    TypeName => [qw( names )],
-    Value    => [qw( val )],
+    TypeName => 'names',
+    Value    => 'val',
 );
-$not_optional{$_} = { map { $_ => 1 } $not_optional{$_}->@* }
+$not_optional{$_}
+    = { map { $_ => 1 }
+        ref $not_optional{$_} ? $not_optional{$_}->@* : $not_optional{$_} }
     for keys %not_optional;
 
 # This makes nearly everything an Option<...>, which is almost surely

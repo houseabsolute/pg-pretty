@@ -18,6 +18,14 @@ fn test_all_cases() -> Result<(), Error> {
     for entry in fs::read_dir(case_dir)? {
         let path = entry?.path();
         if path.is_file() {
+            match path.extension() {
+                Some(e) => {
+                    if e != "tests" {
+                        continue;
+                    }
+                }
+                None => continue,
+            };
             run_tests_from(path)?;
             file_count += 1;
         }

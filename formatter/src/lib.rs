@@ -1,19 +1,22 @@
+extern crate strum;
+#[macro_use]
+extern crate strum_macros;
+
 use pg_pretty_parser::{ast::*, flags::FrameOptions};
 use scopeguard::guard;
 use std::collections::HashMap;
+use strum::AsStaticRef;
 use thiserror::Error;
 //use trace::trace;
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("unexpected node {:?} in {}", .node, .func)]
-    UnexpectedNode { node: String, func: String },
+    UnexpectedNode { node: String, func: &'static str },
     #[error("no target list for select")]
     NoTargetListForSelect,
     #[error("missing {} arg for {} op", .side, .op)]
-    MissingSideForOp { side: String, op: String },
-    #[error("infix expression is {}", e)]
-    MalformedInfixExpression { e: String },
+    MissingSideForOp { side: &'static str, op: String },
     #[error("join type is {} but there is no Pg keyword for this", jt)]
     InexpressibleJoinType { jt: String },
     #[error("join type is inner but is not natual and has no qualifiers or using clause")]
@@ -23,7 +26,10 @@ pub enum Error {
         strat1,
         strat2
     )]
-    CannotMixJoinStrategies { strat1: String, strat2: String },
+    CannotMixJoinStrategies {
+        strat1: &'static str,
+        strat2: &'static str,
+    },
     #[error("order by clause had a USING without an op")]
     OrderByUsingWithoutOp,
     #[error("range function node does not have any functions")]
@@ -32,15 +38,42 @@ pub enum Error {
     RangeFunctionHasNonFuncCallFunction,
     #[error("frame options specified {} but did not contain a value", opt)]
     FrameOptionsValueWithoutOffset { opt: String },
+    #[error("select contained a res target without a val")]
+    SelectResTargetWithoutVal,
+    #[error("update contained a res target without a val")]
+    UpdateResTargetWithoutVal,
+    #[error("{} contained a res target without a name", what)]
+    ResTargetWithoutName { what: &'static str },
+    #[error("index element has no name or expression")]
+    IndexElemWithoutNameOrExpr,
+    #[error("on conflict clause that is neither DO NOTHING nor DO UPDATE")]
+    OnConflictClauseWithUnknownAction,
+    #[error("infer clause has no index or elements and does not have a constraint name")]
+    InferClauseWithoutIndexElementsOrConstraint,
+    #[error("on conflict clause is UPDATE but without any targets to set")]
+    OnConflictUpdateWithoutTargets,
+    #[error("an element in a list of targets for an UPDATE had no name")]
+    UpdateTargetWithoutName,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(AsStaticStr, Debug, PartialEq)]
 enum ContextType {
     AExpr,
     GroupingSet,
+    InsertReturning,
+    InsertStmt,
+    OnConflictUpdate,
     OrderByUsingClause,
     RangeTableSample,
+    SelectStmt,
     SubLink,
+    UpdateStmt,
+}
+
+impl ContextType {
+    fn is_statement(&self) -> bool {
+        self.as_static().ends_with("Stmt")
+    }
 }
 
 #[derive(Debug)]
@@ -90,22 +123,27 @@ impl Formatter {
     //#[trace]
     fn format_node(&mut self, node: &Node) -> R {
         match &node {
-            Node::AConst(a) => self.format_a_const(&a),
-            Node::AExpr(a) => self.format_a_expr(&a),
-            Node::BoolExpr(b) => self.format_bool_expr(&b),
-            Node::ColumnRef(c) => self.format_column_ref(&c),
-            Node::FuncCall(f) => self.format_func_call(&f),
-            Node::GroupingSet(g) => self.format_grouping_set(&g),
-            Node::RangeVar(r) => Ok(self.format_range_var(&r)),
-            Node::RowExpr(r) => self.format_row_expr(&r),
-            Node::SelectStmt(s) => self.format_select_stmt(&s),
+            Node::AConst(a) => self.format_a_const(a),
+            Node::AExpr(a) => self.format_a_expr(a),
+            Node::AIndirection(a) => self.format_a_indirection(a),
+            Node::BoolExpr(b) => self.format_bool_expr(b),
+            Node::ColumnRef(c) => self.format_column_ref(c),
+            Node::FuncCall(f) => self.format_func_call(f),
+            Node::GroupingSet(g) => self.format_grouping_set(g),
+            Node::IndexElem(i) => self.format_index_elem(i),
+            Node::InsertStmt(i) => self.format_insert_stmt(i),
+            Node::RangeVar(r) => Ok(self.format_range_var(r)),
+            Node::ResTarget(r) => self.format_res_target(r),
+            Node::RowExpr(r) => self.format_row_expr(r),
+            Node::SelectStmt(s) => self.format_select_stmt(s),
+            Node::SetToDefault(_) => Ok("DEFAULT".to_string()),
             Node::StringStruct(s) => Ok(self.format_string(&s.str)),
-            Node::SubLink(s) => self.format_sub_link(&s),
-            Node::TypeCast(t) => self.format_type_cast(&t),
-            Node::WindowDef(w) => self.format_window_def(&w, 0),
+            Node::SubLink(s) => self.format_sub_link(s),
+            Node::TypeCast(t) => self.format_type_cast(t),
+            Node::WindowDef(w) => self.format_window_def(w, 0),
             _ => Err(Error::UnexpectedNode {
                 node: node.to_string(),
-                func: "format_node".to_string(),
+                func: "format_node",
             }),
         }
     }
@@ -129,32 +167,27 @@ impl Formatter {
 
     //#[trace]
     fn format_select_stmt(&mut self, s: &SelectStmt) -> R {
-        if let Some(mut op) = self.match_op(&s.op) {
+        self.contexts.push(ContextType::SelectStmt);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        if let Some(mut op) = formatter.match_op(&s.op) {
             // XXX - this is so gross. I think the unstable box matching
             // syntax would make this much less gross.
             let left = match &s.larg {
                 Some(l) => {
                     let SelectStmtWrapper::SelectStmt(l) = &**l;
-                    self.format_select_stmt(l)?
+                    formatter.format_select_stmt(l)?
                 }
-                None => {
-                    return Err(Error::MissingSideForOp {
-                        side: "left".to_string(),
-                        op,
-                    })
-                }
+                None => return Err(Error::MissingSideForOp { side: "left", op }),
             };
             let right = match &s.rarg {
                 Some(r) => {
                     let SelectStmtWrapper::SelectStmt(r) = &**r;
-                    self.format_select_stmt(r)?
+                    formatter.format_select_stmt(r)?
                 }
-                None => {
-                    return Err(Error::MissingSideForOp {
-                        side: "left".to_string(),
-                        op,
-                    })
-                }
+                None => return Err(Error::MissingSideForOp { side: "left", op }),
             };
 
             if s.all {
@@ -168,29 +201,29 @@ impl Formatter {
             Some(tl) => tl,
             None => return Err(Error::NoTargetListForSelect),
         };
-        let mut select = self.format_select_clause(t, s.distinct_clause.as_ref())?;
+        let mut select = formatter.format_select_clause(t, s.distinct_clause.as_ref())?;
         if let Some(f) = &s.from_clause {
-            select.push_str(&self.format_from_clause(f)?);
+            select.push_str(&formatter.format_from_clause(f)?);
         }
         if let Some(w) = &s.where_clause {
-            select.push_str(&self.format_where_clause(w)?);
+            select.push_str(&formatter.format_where_clause(w)?);
         }
         if let Some(g) = &s.group_clause {
-            select.push_str(&self.format_group_by_clause(g)?);
+            select.push_str(&formatter.format_group_by_clause(g)?);
         }
         if let Some(h) = &s.having_clause {
-            select.push_str(&self.format_having_clause(h)?);
+            select.push_str(&formatter.format_having_clause(h)?);
         }
         if let Some(w) = &s.window_clause {
-            select.push_str(&self.format_window_clause(w)?);
+            select.push_str(&formatter.format_window_clause(w)?);
         }
         if let Some(o) = &s.sort_clause {
-            select.push_str(&self.format_order_by_clause(o)?);
+            select.push_str(&formatter.format_order_by_clause(o)?);
             select.push('\n');
         }
-        select.push_str(&self.maybe_format_limit(s)?);
+        select.push_str(&formatter.maybe_format_limit(s)?);
         if let Some(l) = &s.locking_clause {
-            select.push_str(&self.format_locking_clause(l)?);
+            select.push_str(&formatter.format_locking_clause(l)?);
         }
 
         Ok(select)
@@ -238,10 +271,10 @@ impl Formatter {
                 .map(|t| f.format_target_element(t))
                 .collect::<Result<Vec<_>, _>>()
         };
-        return Ok(format!(
+        Ok(format!(
             "{}\n",
             self.one_line_or_many(&prefix, true, false, true, 0, maker)?
-        ));
+        ))
     }
 
     //#[trace]
@@ -250,20 +283,108 @@ impl Formatter {
             Node::ResTarget(rt) => self.format_res_target(rt),
             _ => Err(Error::UnexpectedNode {
                 node: t.to_string(),
-                func: "format_target_element".to_string(),
+                func: "format_target_element",
             }),
         }
     }
 
     //#[trace]
     fn format_res_target(&mut self, rt: &ResTarget) -> R {
-        let mut f = String::new();
-        f.push_str(&self.format_node(&rt.val)?);
-        if let Some(n) = &rt.name {
-            f.push_str(&Self::alias_name(&n));
+        // We need to check for OnConflictUpdate before we check for
+        // InsertStmt.
+        if self.most_recent_stmt_is(ContextType::UpdateStmt)
+            || self.last_context_is(ContextType::OnConflictUpdate)
+        {
+            match &rt.name {
+                Some(n) => match &rt.val {
+                    Some(v) => {
+                        return Ok(format!(
+                            "{} = {}",
+                            self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref())?,
+                            self.format_node(&*v)?,
+                        ))
+                    }
+                    None => return Err(Error::UpdateResTargetWithoutVal),
+                },
+                None => return Err(Error::ResTargetWithoutName { what: "UPDATE" }),
+            }
+        } else if self.most_recent_stmt_is(ContextType::InsertStmt)
+            && !self.last_context_is(ContextType::InsertReturning)
+        {
+            match &rt.name {
+                Some(n) => {
+                    return self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref())
+                }
+                None => return Err(Error::ResTargetWithoutName { what: "INSERT" }),
+            }
         }
 
-        Ok(f)
+        if let Some(v) = &rt.val {
+            let mut target = self.format_node(v)?;
+            if let Some(n) = &rt.name {
+                target.push_str(&Self::alias_name(n));
+            }
+            return Ok(target);
+        }
+
+        Err(Error::SelectResTargetWithoutVal)
+    }
+
+    //#[trace]
+    fn format_name_and_maybe_indirection(
+        &mut self,
+        n: &str,
+        i: Option<&Vec<IndirectionListElement>>,
+    ) -> R {
+        let indirection = match i {
+            Some(inds) => self.format_indirection_list(inds)?,
+            None => String::new(),
+        };
+        Ok(format!("{}{}", n, indirection))
+    }
+
+    fn format_a_indirection(&mut self, a: &AIndirection) -> R {
+        Ok(format!(
+            "{}{}",
+            self.format_node(&*a.arg)?,
+            self.format_indirection_list(&a.indirection)?,
+        ))
+    }
+
+    fn format_indirection_list(&mut self, list: &[IndirectionListElement]) -> R {
+        Ok(list
+            .iter()
+            .map(|e| self.format_indirection_element(e))
+            .collect::<Result<Vec<_>, _>>()?
+            .join(""))
+    }
+
+    fn format_indirection_element(&mut self, i: &IndirectionListElement) -> R {
+        match i {
+            IndirectionListElement::AIndices(i) => self.format_a_indices(i),
+            IndirectionListElement::AStar(_) => Ok(".*".to_string()),
+            IndirectionListElement::StringStruct(s) => Ok(format!(".{}", s.str)),
+        }
+    }
+
+    fn format_a_indices(&mut self, i: &AIndices) -> R {
+        if !i.is_slice {
+            match &i.uidx {
+                Some(u) => return Ok(format!("[{}]", self.format_node(&*u)?)),
+                None => return Ok("[]".to_string()),
+            }
+        }
+
+        let lower = match &i.lidx {
+            Some(l) => self.format_node(&*l)?,
+            None => String::new(),
+        };
+        let upper = match &i.uidx {
+            Some(u) => self.format_node(&*u)?,
+            None => String::new(),
+        };
+
+        Ok(format!("[{}:{}]", lower, upper))
     }
 
     //#[trace]
@@ -303,6 +424,10 @@ impl Formatter {
         }
     }
 
+    // XXX - this does terrible things to simple expressions like `2 + 3 + 4`,
+    // adding unnecessary parens. Every additional operate gets it own new
+    // parens. This needs to be fixed.
+    //
     //#[trace]
     fn format_a_expr(&mut self, a: &AExpr) -> R {
         self.a_expr_depth += 1;
@@ -495,7 +620,7 @@ impl Formatter {
 
         match &f.args {
             Some(a) => {
-                let f = self.joined_list(&a, ", ")?;
+                let f = self.joined_list(a, ", ")?;
                 if f.contains(&[' ', '('][..]) {
                     arg_is_simple = false;
                 }
@@ -746,7 +871,7 @@ impl Formatter {
                     // The operator _should_ be a Vec of StringStructs, but
                     // who knows what wackiness might exist.
                     let mut j = " ".to_string();
-                    j.push_str(&self.joined_list(&o, " ")?);
+                    j.push_str(&self.joined_list(o, " ")?);
                     j.push_str(" ANY");
                     Ok(j)
                 }
@@ -885,21 +1010,21 @@ impl Formatter {
         if j.is_natural {
             if j.quals.is_some() {
                 return Err(Error::CannotMixJoinStrategies {
-                    strat1: "NATURAL".to_string(),
-                    strat2: "ON".to_string(),
+                    strat1: "NATURAL",
+                    strat2: "ON",
                 });
             }
             if j.using_clause.is_some() {
                 return Err(Error::CannotMixJoinStrategies {
-                    strat1: "NATURAL".to_string(),
-                    strat2: "USING".to_string(),
+                    strat1: "NATURAL",
+                    strat2: "USING",
                 });
             }
         }
         if j.quals.is_some() && j.using_clause.is_some() {
             return Err(Error::CannotMixJoinStrategies {
-                strat1: "ON".to_string(),
-                strat2: "USING".to_string(),
+                strat1: "ON",
+                strat2: "USING",
             });
         }
 
@@ -1235,8 +1360,8 @@ impl Formatter {
             funcs
                 .iter()
                 .map(|elt| match &elt.0 {
-                    Node::FuncCall(c) => {
-                        let mut c = f.format_func_call(&c)?;
+                    Node::FuncCall(fc) => {
+                        let mut c = f.format_func_call(fc)?;
                         if let Some(defs) = &elt.1 {
                             c.push_str(" AS ");
                             let last_line_len = f.last_line_len(&c);
@@ -1269,6 +1394,7 @@ impl Formatter {
         Ok(range_func)
     }
 
+    //#[trace]
     fn format_range_table_sample(&mut self, rts: &RangeTableSample) -> R {
         self.contexts.push(ContextType::RangeTableSample);
 
@@ -1288,6 +1414,7 @@ impl Formatter {
         Ok(table_sample)
     }
 
+    //#[trace]
     fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper], last_line_len: usize) -> R {
         let maker = |f: &mut Self| {
             defs.iter()
@@ -1301,6 +1428,7 @@ impl Formatter {
         self.one_line_or_many("", false, true, true, last_line_len, maker)
     }
 
+    //#[trace]
     fn format_column_def(&mut self, def: &ColumnDef) -> R {
         // XXX - is there any way to steal this string instead? That'd require
         // passing the ColumnDef as a non-ref, I believe.
@@ -1308,6 +1436,239 @@ impl Formatter {
         d.push(' ');
         d.push_str(&self.format_type_name(&def.type_name)?);
         Ok(d)
+    }
+
+    //#[trace]
+    fn format_insert_stmt(&mut self, i: &InsertStmt) -> R {
+        self.contexts.push(ContextType::InsertStmt);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        let RangeVarWrapper::RangeVar(r) = &i.relation;
+
+        let mut insert = formatter.indent_str("INSERT INTO\n");
+
+        formatter.push_indent_one_level();
+
+        let mut prefix = formatter.indent_str(&formatter.format_range_var(r));
+
+        if let Some(cols) = &i.cols {
+            prefix.push(' ');
+            let maker = |f: &mut Self| {
+                cols.iter()
+                    .map(|ResTargetWrapper::ResTarget(c)| f.format_res_target(c))
+                    .collect::<Result<Vec<_>, _>>()
+            };
+            insert.push_str(&formatter.one_line_or_many(&prefix, false, true, true, 0, maker)?);
+        } else {
+            insert.push_str(&prefix);
+        }
+        insert.push('\n');
+
+        formatter.pop_indent();
+
+        if let Some(o) = &i.r#override {
+            match o {
+                OverridingKind::OverridingSystemValue => {
+                    insert.push_str("OVERRIDING SYSTEM VALUE\n")
+                }
+                OverridingKind::OverridingUserValue => insert.push_str("OVERRIDING USER VALUE\n"),
+                _ => (),
+            }
+        }
+
+        insert.push_str(&formatter.format_insert_values(&i)?);
+
+        if let Some(OnConflictClauseWrapper::OnConflictClause(occ)) = &i.on_conflict_clause {
+            insert.push_str(&formatter.format_on_conflict_clause(occ)?);
+        }
+
+        // If this is an INSERT ... SELECT without an ON CONFLICT clause then
+        // it already has a newline.
+        if !insert.ends_with('\n') {
+            insert.push('\n');
+        }
+
+        if let Some(r) = &i.returning_list {
+            formatter.contexts.push(ContextType::InsertReturning);
+            let mut formatter = guard(formatter, |mut s| {
+                s.contexts.pop();
+            });
+
+            let maker = |f: &mut Self| f.formatted_list(r);
+            insert.push_str(&formatter.one_line_or_many(
+                "RETURNING ",
+                true,
+                false,
+                true,
+                0,
+                maker,
+            )?);
+            insert.push('\n');
+        }
+
+        Ok(insert)
+    }
+
+    //#[trace]
+    fn format_insert_values(&mut self, i: &InsertStmt) -> R {
+        match &i.select_stmt {
+            Some(SelectStmtWrapper::SelectStmt(s)) => {
+                if !Self::is_values_insert(s) {
+                    return self.format_select_stmt(s);
+                }
+                let mut values = "VALUES\n".to_string();
+
+                self.push_indent_one_level();
+
+                values.push_str(
+                    &s.values_lists
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|v| {
+                            let maker = |f: &mut Self| f.formatted_list(v);
+                            self.one_line_or_many("", true, true, true, 0, maker)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?
+                        .join(",\n"),
+                );
+
+                self.pop_indent();
+
+                values.push('\n');
+
+                Ok(values)
+            }
+            None => Ok("DEFAULT VALUES\n".to_string()),
+        }
+    }
+
+    // The values are given as a SelectStmt. If the _only_ thing that's not
+    // none in the SelectStmt is the values_list then it's a simple "INSERT
+    // INTO x VALUES ( ... )" type of INSERT. Otherwise the select is a real
+    // SELECT so we have "INSERT INTO x SELECT ...".
+    //
+    //#[trace]
+    fn is_values_insert(s: &SelectStmt) -> bool {
+        s.distinct_clause.is_none()
+            && s.into_clause.is_none()
+            && s.target_list.is_none()
+            && s.from_clause.is_none()
+            && s.where_clause.is_none()
+            && s.group_clause.is_none()
+            && s.having_clause.is_none()
+            && s.window_clause.is_none()
+            && s.sort_clause.is_none()
+            && s.limit_offset.is_none()
+            && s.limit_count.is_none()
+            && s.locking_clause.is_none()
+            && s.with_clause.is_none()
+            && s.larg.is_none()
+            && s.rarg.is_none()
+            && s.values_lists.is_some()
+    }
+
+    //#[trace]
+    fn format_on_conflict_clause(&mut self, occ: &OnConflictClause) -> R {
+        let mut on_conflict = "ON CONFLICT ".to_string();
+
+        if let Some(InferClauseWrapper::InferClause(i)) = &occ.infer {
+            on_conflict.push_str(&self.format_infer_clause(&i)?);
+        }
+
+        match occ.action {
+            OnConflictAction::OnconflictNothing => {
+                on_conflict.push_str(&self.indent_str("DO NOTHING"));
+                return Ok(on_conflict);
+            }
+            OnConflictAction::OnconflictUpdate => (),
+            _ => return Err(Error::OnConflictClauseWithUnknownAction),
+        }
+
+        let targets = match occ.target_list.as_ref() {
+            Some(t) => t,
+            None => return Err(Error::OnConflictUpdateWithoutTargets),
+        };
+
+        let do_update = "DO UPDATE SET ";
+        on_conflict.push_str(&self.format_on_conflict_update_clause(targets, do_update)?);
+
+        if let Some(w) = &occ.where_clause {
+            on_conflict.push('\n');
+            self.push_indent_one_level();
+            on_conflict.push_str(&self.format_where_clause(&*w)?);
+            self.pop_indent();
+        }
+
+        Ok(on_conflict)
+    }
+
+    //#[trace]
+    fn format_infer_clause(&mut self, i: &InferClause) -> R {
+        let mut infer = String::new();
+        if let Some(ie) = &i.index_elems {
+            let maker = |f: &mut Self| f.formatted_list(ie);
+            infer.push_str(&self.one_line_or_many("", false, true, true, 0, maker)?);
+            infer.push('\n');
+            if let Some(w) = &i.where_clause {
+                infer.push_str(&self.format_where_clause(&*w)?);
+                infer.push('\n');
+            }
+        } else if let Some(c) = &i.conname {
+            infer = format!("ON CONSTRAINT {}", c);
+        } else {
+            return Err(Error::InferClauseWithoutIndexElementsOrConstraint);
+        }
+
+        Ok(infer)
+    }
+
+    // XXX - This is still incomplete. It has enough for ON CONFLICT clauses,
+    // but for CREATE INDEX it needs to be finished.
+    //
+    //#[trace]
+    fn format_index_elem(&mut self, i: &IndexElem) -> R {
+        let mut elem = String::new();
+        if let Some(n) = &i.name {
+            elem.push_str(n);
+        } else if let Some(e) = &i.expr {
+            elem.push_str(&self.format_node(&*e)?);
+        } else {
+            return Err(Error::IndexElemWithoutNameOrExpr);
+        }
+
+        if let Some(c) = &i.collation {
+            elem.push(' ');
+            elem.push_str(&self.formatted_list(c)?.join(" "));
+        }
+
+        if let Some(o) = &i.opclass {
+            elem.push(' ');
+            elem.push_str(&self.formatted_list(o)?.join(" "));
+        }
+
+        Ok(elem)
+    }
+
+    fn format_on_conflict_update_clause(
+        &mut self,
+        target_list: &[Node],
+        prefix: &str,
+    ) -> Result<String, Error> {
+        self.contexts.push(ContextType::OnConflictUpdate);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        let maker = |f: &mut Self| {
+            target_list
+                .iter()
+                .map(|t| f.format_target_element(t))
+                .collect::<Result<Vec<_>, _>>()
+        };
+        formatter.one_line_or_many(prefix, false, false, true, prefix.len(), maker)
     }
 
     //#[trace(disable(items_maker))]
@@ -1321,7 +1682,7 @@ impl Formatter {
         mut items_maker: F,
     ) -> R
     where
-        F: FnMut(&mut Formatter) -> Result<Vec<String>, Error>,
+        F: FnMut(&mut Self) -> Result<Vec<String>, Error>,
     {
         let mut one_line = prefix.to_string();
         if indent_prefix {
@@ -1375,7 +1736,7 @@ impl Formatter {
         mut items_maker: F,
     ) -> R
     where
-        F: FnMut(&mut Formatter) -> Result<Vec<String>, Error>,
+        F: FnMut(&mut Self) -> Result<Vec<String>, Error>,
     {
         let mut many = prefix.to_string();
         if indent_prefix {
@@ -1441,6 +1802,21 @@ impl Formatter {
 
     fn is_in_context(&self, t: ContextType) -> bool {
         self.contexts.contains(&t)
+    }
+
+    fn last_context_is(&self, t: ContextType) -> bool {
+        match self.contexts.last() {
+            Some(l) => *l == t,
+            None => false,
+        }
+    }
+
+    fn most_recent_stmt_is(&self, t: ContextType) -> bool {
+        match self.contexts.iter().rev().find(|c| c.is_statement()) {
+            Some(c) => *c == t,
+            // XXX - Can this happen?
+            None => false,
+        }
     }
 
     fn joined_list(&mut self, v: &[Node], joiner: &str) -> R {

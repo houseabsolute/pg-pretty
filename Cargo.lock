@@ -656,6 +656,8 @@ dependencies = [
  "regex",
  "scopeguard",
  "spectral",
+ "strum",
+ "strum_macros",
  "thiserror",
 ]
 
@@ -1023,10 +1025,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "strum_macros"
-version = "0.18.0"
+name = "strum"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87c85aa3f8ea653bfd3ddf25f7ee357ee4d204731f6aa9ad04002306f6e2774c"
+checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
+
+[[package]]
+name = "strum_macros"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
 dependencies = [
  "heck",
  "proc-macro2 1.0.24",
