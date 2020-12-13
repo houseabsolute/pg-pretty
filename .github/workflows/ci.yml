@@ -3,7 +3,7 @@ name: Continuous integration
 on: [push, pull_request]
 
 env:
-  CRATE_NAME: precious
+  CRATE_NAME: pg-pretty
   RUST_BACKTRACE: 1
 
 jobs:
@@ -76,19 +76,19 @@ jobs:
           - os_name: Linux
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bin: precious
-            name: precious-Linux-x86_64.tar.gz
+            bin: pg-pretty
+            name: pg-pretty-Linux-x86_64.tar.gz
           # This needs libclang, which I will figure out later.
           # - os_name: Windows
           #   os: windows-latest
           #   target: x86_64-pc-windows-msvc
-          #   bin: precious.exe
-          #   name: precious-Windows-x86_64.zip
+          #   bin: pg-pretty.exe
+          #   name: pg-pretty-Windows-x86_64.zip
           - os_name: macOS
             os: macOS-latest
             target: x86_64-apple-darwin
-            bin: precious
-            name: precious-Darwin-x86_64.tar.gz
+            bin: pg-pretty
+            name: pg-pretty-Darwin-x86_64.tar.gz
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout
@@ -124,7 +124,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          files: "precious*"
+          files: "pg-pretty*"
           body_path: Changes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
