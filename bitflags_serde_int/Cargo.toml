@@ -14,9 +14,9 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "~1"
 quote = "~1"
-serde = "~1"
 syn = "~1"
 
 [dev-dependencies]
 bitflags = "~1"
+serde = "~1"
 serde_json = "~1"
