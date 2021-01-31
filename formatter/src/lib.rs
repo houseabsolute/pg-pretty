@@ -123,11 +123,11 @@ impl Formatter {
     //#[trace]
     fn format_node(&mut self, node: &Node) -> R {
         match &node {
-            Node::AConst(a) => self.format_a_const(a),
+            Node::AConst(a) => Ok(self.format_a_const(a)),
             Node::AExpr(a) => self.format_a_expr(a),
             Node::AIndirection(a) => self.format_a_indirection(a),
             Node::BoolExpr(b) => self.format_bool_expr(b),
-            Node::ColumnRef(c) => self.format_column_ref(c),
+            Node::ColumnRef(c) => Ok(self.format_column_ref(c)),
             Node::FuncCall(f) => self.format_func_call(f),
             Node::GroupingSet(g) => self.format_grouping_set(g),
             Node::IndexElem(i) => self.format_index_elem(i),
@@ -223,7 +223,7 @@ impl Formatter {
         }
         select.push_str(&formatter.maybe_format_limit(s)?);
         if let Some(l) = &s.locking_clause {
-            select.push_str(&formatter.format_locking_clause(l)?);
+            select.push_str(&formatter.format_locking_clause(l));
         }
 
         Ok(select)
@@ -401,7 +401,7 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_column_ref(&mut self, c: &ColumnRef) -> R {
+    fn format_column_ref(&mut self, c: &ColumnRef) -> String {
         let mut cols: Vec<String> = vec![];
         for f in &c.fields {
             match f {
@@ -410,17 +410,17 @@ impl Formatter {
             }
         }
 
-        Ok(cols.join("."))
+        cols.join(".")
     }
 
     //#[trace]
-    fn format_a_const(&mut self, a: &AConst) -> R {
+    fn format_a_const(&mut self, a: &AConst) -> String {
         match &a.val {
-            Value::StringStruct(s) => Ok(self.quote_string(&s.str)),
-            Value::BitString(s) => Ok(self.quote_string(&s.str)),
-            Value::Integer(i) => Ok(i.ival.to_string()),
-            Value::Float(f) => Ok(f.str.clone()),
-            Value::Null(_) => Ok("NULL".to_string()),
+            Value::StringStruct(s) => self.quote_string(&s.str),
+            Value::BitString(s) => self.quote_string(&s.str),
+            Value::Integer(i) => i.ival.to_string(),
+            Value::Float(f) => f.str.clone(),
+            Value::Null(_) => "NULL".to_string(),
         }
     }
 
@@ -1162,7 +1162,7 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_locking_clause(&mut self, l: &[LockingClauseWrapper]) -> R {
+    fn format_locking_clause(&mut self, l: &[LockingClauseWrapper]) -> String {
         let mut locking: Vec<String> = vec![];
 
         for LockingClauseWrapper::LockingClause(c) in l {
@@ -1230,7 +1230,7 @@ impl Formatter {
             locking.push(many);
         }
 
-        Ok(format!("{}\n", locking.join("\n")))
+        format!("{}\n", locking.join("\n"))
     }
 
     //#[trace]
@@ -1276,7 +1276,7 @@ impl Formatter {
     fn format_type_cast(&mut self, tc: &TypeCast) -> R {
         let mut type_cast = self.format_node(&*tc.arg)?;
         type_cast.push_str("::");
-        type_cast.push_str(&self.format_type_name(&tc.type_name)?);
+        type_cast.push_str(&self.format_type_name(&tc.type_name));
 
         // This is some oddity of the parser. It turns TRUE and FALSE literals
         // into this cast expression.
@@ -1290,9 +1290,9 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_type_name(&mut self, tn: &TypeNameWrapper) -> R {
+    fn format_type_name(&mut self, tn: &TypeNameWrapper) -> String {
         match tn {
-            TypeNameWrapper::TypeName(t) => Ok(t
+            TypeNameWrapper::TypeName(t) => t
                 .names
                 .iter()
                 // Is this clone necessary? It feels like there should be a
@@ -1302,7 +1302,7 @@ impl Formatter {
                 })
                 .filter(|n| n != "pg_catalog")
                 .collect::<Vec<String>>()
-                .join(".")),
+                .join("."),
         }
     }
 
@@ -1417,25 +1417,26 @@ impl Formatter {
     //#[trace]
     fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper], last_line_len: usize) -> R {
         let maker = |f: &mut Self| {
-            defs.iter()
+            Ok(defs
+                .iter()
                 .map(|d| {
                     let ColumnDefWrapper::ColumnDef(d) = d;
                     f.format_column_def(d)
                 })
-                .collect::<Result<Vec<_>, _>>()
+                .collect::<Vec<_>>())
         };
 
         self.one_line_or_many("", false, true, true, last_line_len, maker)
     }
 
     //#[trace]
-    fn format_column_def(&mut self, def: &ColumnDef) -> R {
+    fn format_column_def(&mut self, def: &ColumnDef) -> String {
         // XXX - is there any way to steal this string instead? That'd require
         // passing the ColumnDef as a non-ref, I believe.
         let mut d = def.colname.clone();
         d.push(' ');
-        d.push_str(&self.format_type_name(&def.type_name)?);
-        Ok(d)
+        d.push_str(&self.format_type_name(&def.type_name));
+        d
     }
 
     //#[trace]
