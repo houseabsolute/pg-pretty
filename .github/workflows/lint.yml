@@ -35,9 +35,11 @@ jobs:
         with:
           repo: houseabsolute/precious
           file: precious-Linux-x86_64.tar.gz
-      - name: Untar precious
+      - name: Run install-dev-tools.sh
         run: |
-          tar -xvzf precious-Linux-x86_64.tar.gz
+          set -e
+          mkdir $HOME/bin
+          ./dev/bin/install-dev-tools.sh
       - name: Run precious
         run: |
-          ./precious lint -a
+          PATH=$PATH:$HOME/bin precious lint -a
