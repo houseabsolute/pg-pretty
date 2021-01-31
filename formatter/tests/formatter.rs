@@ -83,9 +83,7 @@ fn run_tests_from(p: path::PathBuf) -> Result<(), Error> {
 fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<(), Error> {
     let mut f = Formatter::new();
     match parser::parse_sql(input) {
-        Err(e) => {
-            return Err(anyhow!("Could not parse `{}` ({})", input, e));
-        }
+        Err(e) => Err(anyhow!("Could not parse `{}` ({})", input, e)),
         Ok(p) => {
             let got = &f
                 .format_root_stmt(&p[0])
@@ -109,7 +107,7 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
                             .collect::<Vec<String>>()
                             .join("")
                     );
-                    print!("\n");
+                    println!();
                     println!("Got");
                     println!(
                         "{}",

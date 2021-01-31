@@ -12,8 +12,6 @@ bitflags! {
     }
 }
 
-use serde_json;
-
 #[test]
 fn test_deserialize() {
     let rock: GenreFlags = serde_json::from_str("1").unwrap();

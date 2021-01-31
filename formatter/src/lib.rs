@@ -1793,10 +1793,7 @@ impl Formatter {
     }
 
     fn last_line_len(&self, text: &str) -> usize {
-        let index = match text.rfind('\n') {
-            Some(i) => i,
-            None => 0,
-        };
+        let index = text.rfind('\n').unwrap_or(0);
         text.len() - index
     }
 
