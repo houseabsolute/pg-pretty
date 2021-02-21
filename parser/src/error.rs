@@ -15,9 +15,9 @@ pub struct ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let e = if let Some(m) = &self.message {
-            m.clone()
+            &m
         } else {
-            "no message returned from parse".to_string()
+            "no message returned from parse"
         };
 
         write!(f, "{}", e)
