@@ -1,11 +1,7 @@
-extern crate strum;
-#[macro_use]
-extern crate strum_macros;
-
 use pg_pretty_parser::{ast::*, flags::FrameOptions};
 use scopeguard::guard;
 use std::collections::HashMap;
-use strum::AsStaticRef;
+use strum_macros::AsRefStr;
 use thiserror::Error;
 //use trace::trace;
 
@@ -56,7 +52,7 @@ pub enum Error {
     UpdateTargetWithoutName,
 }
 
-#[derive(AsStaticStr, Debug, PartialEq)]
+#[derive(AsRefStr, Debug, PartialEq)]
 enum ContextType {
     AExpr,
     GroupingSet,
@@ -72,7 +68,7 @@ enum ContextType {
 
 impl ContextType {
     fn is_statement(&self) -> bool {
-        self.as_static().ends_with("Stmt")
+        self.as_ref().ends_with("Stmt")
     }
 }
 
