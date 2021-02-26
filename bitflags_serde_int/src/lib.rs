@@ -64,6 +64,7 @@ fn impl_serialize_macro(ast: &syn::DeriveInput) -> TokenStream {
     let gen = quote! {
         use serde::{Serialize, Serializer};
 
+        #[automatically_derived]
         impl Serialize for #name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -89,6 +90,7 @@ fn impl_deserialize_macro(ast: &syn::DeriveInput) -> TokenStream {
     let gen = quote! {
         use serde::{Deserialize, Deserializer};
 
+        #[automatically_derived]
         impl<'de> Deserialize<'de> for #name {
             fn deserialize<D>(deserializer: D) -> Result<#name, D::Error>
             where
@@ -110,6 +112,7 @@ fn visitor_for(name: &Ident, visitor_name: &Ident) -> proc_macro2::TokenStream {
 
         struct #visitor_name;
 
+        #[automatically_derived]
         impl #visitor_name {
             fn new_bitflags_struct<E>(value: u32) -> Result<#name, E>
             where
@@ -125,6 +128,7 @@ fn visitor_for(name: &Ident, visitor_name: &Ident) -> proc_macro2::TokenStream {
             }
         }
 
+        #[automatically_derived]
         impl<'de> Visitor<'de> for #visitor_name {
             type Value = #name;
 
