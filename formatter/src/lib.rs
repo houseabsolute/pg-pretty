@@ -1713,7 +1713,7 @@ impl Formatter {
                 .map(|t| f.format_target_element(t))
                 .collect::<Result<Vec<_>, _>>()
         };
-        formatter.one_line_or_many(prefix, false, false, true, prefix.len(), maker)
+        formatter.many_lines(prefix, false, false, true, maker)
     }
 
     //#[trace(disable(items_maker))]
