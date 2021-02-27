@@ -439,10 +439,7 @@ impl Formatter {
             AExprKind::AExprParen => panic!("no idea how to handle AExprParen kind of AExpr"),
             _ => {
                 let o = a.name.as_ref().unwrap_or_else(|| {
-                    panic!(format!(
-                        "must have a name defined for a {} kind of AExpr",
-                        a.kind
-                    ))
+                    panic!("must have a name defined for a {} kind of AExpr", a.kind)
                 });
                 formatter.formatted_list(o)?.join(" ")
             }
@@ -503,10 +500,7 @@ impl Formatter {
         match op {
             "=" => "",
             "<>" => "NOT ",
-            _ => panic!(format!(
-                "got an AExprOf AExpr with an invalid op name: {}",
-                op
-            )),
+            _ => panic!("got an AExprOf AExpr with an invalid op name: {}", op),
         }
     }
 
@@ -519,9 +513,7 @@ impl Formatter {
         current_p: u8,
         last_p: u8,
     ) -> R {
-        let mut e: Vec<String> = vec![];
-        e.push(self.format_node(&left)?);
-        e.push(op);
+        let mut e: Vec<String> = vec![self.format_node(&left)?, op];
         match right {
             OneOrManyNodes::One(r) => e.push(self.format_node(&r)?),
             // XXX - Is this right? The right side could be the right side of
