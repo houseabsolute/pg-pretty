@@ -54,7 +54,7 @@ pub enum Error {
 
 #[derive(AsRefStr, Debug, PartialEq)]
 enum ContextType {
-    AExpr,
+    AExpr(u8),
     GroupingSet,
     InsertReturning,
     InsertStmt,
@@ -74,7 +74,6 @@ impl ContextType {
 
 #[derive(Debug)]
 pub struct Formatter {
-    a_expr_depth: u8,
     bool_expr_depth: u8,
     max_line_len: usize,
     indent_width: usize,
@@ -94,7 +93,6 @@ impl Formatter {
         type_renaming.insert("int4".to_string(), "int".to_string());
 
         Self {
-            a_expr_depth: 0,
             bool_expr_depth: 0,
             max_line_len: 100,
             indent_width: 4,
@@ -151,7 +149,7 @@ impl Formatter {
         // works in practice though ...
         match self.contexts.last() {
             Some(c) => match c {
-                ContextType::AExpr
+                ContextType::AExpr(_)
                 | ContextType::OrderByUsingClause
                 | ContextType::RangeTableSample
                 | ContextType::SubLink => s.to_string(),
@@ -426,10 +424,14 @@ impl Formatter {
     //
     //#[trace]
     fn format_a_expr(&mut self, a: &AExpr) -> R {
-        self.a_expr_depth += 1;
-        self.contexts.push(ContextType::AExpr);
+        let last_p = match self.contexts.last() {
+            Some(ContextType::AExpr(p)) => *p,
+            _ => 0,
+        };
+        let current_p = self.operator_precedence(&a.name);
+
+        self.contexts.push(ContextType::AExpr(current_p));
         let mut formatter = guard(self, |s| {
-            s.a_expr_depth -= 1;
             s.contexts.pop();
         });
 
@@ -455,11 +457,46 @@ impl Formatter {
             AExprKind::AExprNullif => "NULLIF".to_string(),
             AExprKind::AExprOf => format!("IS {}OF", formatter.maybe_not(&op)),
             AExprKind::AExprIn => format!("{}IN", formatter.maybe_not(&op)),
+            // XXX - need to handle BETWEEN - might require refactoring to
+            // pass a format string to format_infix_expr, like "BETWEEN {} AND
+            // {}", and then format_infix_expr would invoke format! to fill in
+            // the left & right expressions.
+            //
             // For all the rest we can use the op as is.
             _ => op,
         };
 
-        formatter.format_infix_expr(&a.lexpr, real_op, &a.rexpr)
+        formatter.format_infix_expr(&a.lexpr, real_op, &a.rexpr, current_p, last_p)
+    }
+
+    // From https://www.postgresql.org/docs/13/sql-syntax-lexical.html
+    fn operator_precedence(&self, name: &Option<List>) -> u8 {
+        let op = if let Some(n) = &name {
+            if n.len() == 1 {
+                if let Node::StringStruct(StringStruct { str: s }) = &n[0] {
+                    s
+                } else {
+                    return 0;
+                }
+            } else {
+                return 0;
+            }
+        } else {
+            return 0;
+        };
+
+        // This isn't all operators, it's just the ones that are going to show
+        // up in an AExpr. Things like array access and table/column name
+        // separators are handled elsewhere. The numbers are based on their
+        // position in the table, with the lowest precedence being 1.
+        match op.as_ref() {
+            "^" => 10,
+            "*" | "/" | "%" => 9,
+            "+" | "-" => 8,
+            "<" | ">" | "=" | "<=" | ">=" | "<>" => 6,
+            "IS" | "ISNULL" | "NOTNULL" => 5,
+            _ => 7,
+        }
     }
 
     fn maybe_not(&self, op: &str) -> &str {
@@ -474,7 +511,14 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_infix_expr(&mut self, left: &Node, op: String, right: &OneOrManyNodes) -> R {
+    fn format_infix_expr(
+        &mut self,
+        left: &Node,
+        op: String,
+        right: &OneOrManyNodes,
+        current_p: u8,
+        last_p: u8,
+    ) -> R {
         let mut e: Vec<String> = vec![];
         e.push(self.format_node(&left)?);
         e.push(op);
@@ -487,7 +531,11 @@ impl Formatter {
                 e.push(self.one_line_or_many("", false, true, true, 0, |f| f.formatted_list(&r))?)
             }
         }
-        if self.a_expr_depth > 1 {
+
+        // If our AST has a higher precedence operator deeper in the tree than
+        // the current operator, then we know there were parens surrounding
+        // the higher precedence operator in the original SQL.
+        if last_p > current_p {
             e.insert(0, "(".to_string());
             e.push(")".to_string());
         }

@@ -271,8 +271,7 @@ INSERT INTO
 VALUES
     ( 8, 'Anvil Distribution', 2012 )
 ON CONFLICT (did)
-DO UPDATE SET dname = ( ( excluded.dname || ' (formerly ' ) || d.dname ) || ')',
-              dyear = 2012
+DO UPDATE SET dname = excluded.dname || ' (formerly ' || d.dname || ')', dyear = 2012
     WHERE d.zipcode <> '21201'
 ----
 
