@@ -588,6 +588,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 
 [[package]]
+name = "pg-pretty"
+version = "0.0.1"
+dependencies = [
+ "eyre",
+ "pg-pretty-formatter",
+ "pg-pretty-parser",
+]
+
+[[package]]
 name = "pg-pretty-formatter"
 version = "0.0.1"
 dependencies = [
@@ -616,15 +625,6 @@ dependencies = [
  "spectral",
  "strum_macros",
  "thiserror",
-]
-
-[[package]]
-name = "pretty-pg"
-version = "0.0.1"
-dependencies = [
- "eyre",
- "pg-pretty-formatter",
- "pg-pretty-parser",
 ]
 
 [[package]]
