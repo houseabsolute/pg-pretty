@@ -462,10 +462,10 @@ impl Formatter {
         formatter.format_infix_expr(&a.lexpr, real_op, &a.rexpr)
     }
 
-    fn maybe_not(&self, op: &str) -> String {
+    fn maybe_not(&self, op: &str) -> &str {
         match op {
-            "=" => String::new(),
-            "<>" => "NOT ".to_string(),
+            "=" => "",
+            "<>" => "NOT ",
             _ => panic!(format!(
                 "got an AExprOf AExpr with an invalid op name: {}",
                 op
