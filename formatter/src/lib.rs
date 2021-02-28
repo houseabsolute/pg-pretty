@@ -52,11 +52,11 @@ pub enum FormatterError {
 enum ContextType {
     AExpr(u8),
     GroupingSet,
-    InsertReturning,
     InsertStmt,
     OnConflictUpdate,
     OrderByUsingClause,
     RangeTableSample,
+    Returning,
     SelectStmt,
     SubLink,
     UpdateStmt,
@@ -118,6 +118,7 @@ impl Formatter {
             Node::AIndirection(a) => self.format_a_indirection(a),
             Node::BoolExpr(b) => self.format_bool_expr(b),
             Node::ColumnRef(c) => Ok(self.format_column_ref(c)),
+            Node::CurrentOfExpr(c) => Ok(self.format_current_of_expr(c)),
             Node::FuncCall(f) => self.format_func_call(f),
             Node::GroupingSet(g) => self.format_grouping_set(g),
             Node::IndexElem(i) => self.format_index_elem(i),
@@ -130,6 +131,7 @@ impl Formatter {
             Node::StringStruct(s) => Ok(self.format_string(&s.str)),
             Node::SubLink(s) => self.format_sub_link(s),
             Node::TypeCast(t) => self.format_type_cast(t),
+            Node::UpdateStmt(u) => self.format_update_stmt(u),
             Node::WindowDef(w) => self.format_window_def(w, 0),
             _ => Err(FormatterError::UnexpectedNode {
                 node: node.to_string(),
@@ -282,7 +284,8 @@ impl Formatter {
     fn format_res_target(&mut self, rt: &ResTarget) -> R {
         // We need to check for OnConflictUpdate before we check for
         // InsertStmt.
-        if self.most_recent_stmt_is(ContextType::UpdateStmt)
+        if (self.most_recent_stmt_is(ContextType::UpdateStmt)
+            && !self.last_context_is(ContextType::Returning))
             || self.last_context_is(ContextType::OnConflictUpdate)
         {
             return match &rt.name {
@@ -297,7 +300,7 @@ impl Formatter {
                 None => Err(FormatterError::ResTargetWithoutName { what: "UPDATE" }),
             };
         } else if self.most_recent_stmt_is(ContextType::InsertStmt)
-            && !self.last_context_is(ContextType::InsertReturning)
+            && !self.last_context_is(ContextType::Returning)
         {
             return match &rt.name {
                 Some(n) => self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref()),
@@ -397,6 +400,11 @@ impl Formatter {
         }
 
         cols.join(".")
+    }
+
+    //#[trace]
+    fn format_current_of_expr(&self, c: &CurrentOfExpr) -> String {
+        format!("CURRENT OF {}", c.cursor_name)
     }
 
     //#[trace]
@@ -1520,21 +1528,7 @@ impl Formatter {
         }
 
         if let Some(r) = &i.returning_list {
-            formatter.contexts.push(ContextType::InsertReturning);
-            let mut formatter = guard(formatter, |mut s| {
-                s.contexts.pop();
-            });
-
-            let maker = |f: &mut Self| f.formatted_list(r);
-            insert.push_str(&formatter.one_line_or_many(
-                "RETURNING ",
-                true,
-                false,
-                true,
-                0,
-                maker,
-            )?);
-            insert.push('\n');
+            insert.push_str(&formatter.format_returning_clause(r)?);
         }
 
         Ok(insert)
@@ -1698,6 +1692,115 @@ impl Formatter {
                 .collect::<Result<Vec<_>, _>>()
         };
         formatter.many_lines(prefix, false, false, true, maker)
+    }
+
+    //#[trace]
+    fn format_returning_clause(&mut self, r: &[Node]) -> R {
+        self.contexts.push(ContextType::Returning);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        let maker = |f: &mut Self| f.formatted_list(r);
+        let mut returning =
+            formatter.one_line_or_many("RETURNING ", true, false, true, 0, maker)?;
+        returning.push('\n');
+
+        Ok(returning)
+    }
+
+    //#[trace]
+    fn format_update_stmt(&mut self, u: &UpdateStmt) -> R {
+        self.contexts.push(ContextType::UpdateStmt);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        let RangeVarWrapper::RangeVar(r) = &u.relation;
+
+        let mut update =
+            formatter.indent_str(&format!("UPDATE {}\n", formatter.format_range_var(r)));
+
+        let maker = |f: &mut Formatter| f.update_stmt_res_target_lines(&u.target_list);
+
+        update.push_str(&formatter.many_lines("SET ", false, false, true, maker)?);
+        update.push('\n');
+
+        if let Some(f) = &u.from_clause {
+            update.push_str(&formatter.format_from_clause(f)?);
+        }
+        if let Some(w) = &u.where_clause {
+            update.push_str(&formatter.format_where_clause(w)?);
+        }
+        if let Some(r) = &u.returning_list {
+            update.push_str(&formatter.format_returning_clause(r)?);
+        }
+
+        Ok(update)
+    }
+
+    fn update_stmt_res_target_lines(
+        &mut self,
+        list: &[Node],
+    ) -> Result<Vec<String>, FormatterError> {
+        let mut lines: Vec<String> = vec![];
+
+        let mut i = 0;
+        while i < list.len() {
+            if let Node::ResTarget(t) = &list[i] {
+                let v = match &t.val {
+                    Some(v) => &**v,
+                    None => {
+                        panic!("got a ResTarget in an UpdateStmt target_list which is None!")
+                    }
+                };
+                let l = if let Node::MultiAssignRef(m) = v {
+                    let mut names: Vec<String> = vec![];
+                    let mut j = 1;
+                    while j <= m.ncolumns {
+                        names.push(self.res_target_name_or_panic(&list[i]));
+                        i += 1;
+                        j += 1;
+                    }
+                    self.format_multi_assign(names, m)?
+                } else {
+                    self.format_res_target(t)?
+                };
+                lines.push(l);
+            } else {
+                panic!("got a node that is not a ResTarget in an UpdateStmt target_list!");
+            };
+
+            i += 1;
+        }
+
+        Ok(lines)
+    }
+
+    fn res_target_name_or_panic(&self, node: &Node) -> String {
+        if let Node::ResTarget(t) = node {
+            if let Some(n) = &t.name {
+                return n.clone();
+            }
+            panic!("got a ResTarget in an UpdateStmt target_list without a name!");
+        }
+        panic!("got a Node in an UpdateStmt target_list that is not a ResTarget!");
+    }
+
+    //#[trace]
+    fn format_multi_assign(&mut self, names: Vec<String>, m: &MultiAssignRef) -> R {
+        if names.len() == 1 {
+            return Ok(format!("{} = {}", names[0], self.format_node(&*m.source)?));
+        }
+
+        let mut left = "( ".to_string();
+        left.push_str(&names.join(", "));
+        left.push_str(" )");
+
+        // This seems to just work if RHS is a subselect, wrapping and all.
+        let right = self.format_node(&*m.source)?;
+
+        Ok(format!("{} = {}", left, right))
     }
 
     //#[trace(disable(items_maker))]

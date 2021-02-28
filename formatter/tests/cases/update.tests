@@ -1,0 +1,114 @@
+++++
+basic UPDATE
+----
+UPDATE films SET kind = 'Dramatic' WHERE kind = 'Drama'
+----
+UPDATE films
+SET kind = 'Dramatic'
+WHERE kind = 'Drama'
+----
+
+++++
+UPDATE with WHERE clause
+----
+UPDATE weather SET temp_lo = temp_lo+1, temp_hi = temp_lo+15, prcp = DEFAULT
+  WHERE city = 'San Francisco' AND date = '2003-07-03'
+----
+UPDATE weather
+SET temp_lo = temp_lo + 1,
+    temp_hi = temp_lo + 15,
+    prcp = DEFAULT
+WHERE city = 'San Francisco'
+      AND date = '2003-07-03'
+----
+
+++++
+UPDATE with WHERE and RETURNING
+----
+UPDATE weather SET temp_lo = temp_lo+1, temp_hi = temp_lo+15, prcp = DEFAULT
+  WHERE city = 'San Francisco' AND date = '2003-07-03'
+  RETURNING temp_lo, temp_hi, prcp
+----
+UPDATE weather
+SET temp_lo = temp_lo + 1,
+    temp_hi = temp_lo + 15,
+    prcp = DEFAULT
+WHERE city = 'San Francisco'
+      AND date = '2003-07-03'
+RETURNING temp_lo, temp_hi, prcp
+----
+
+++++
+UPDATE with multi-assign
+----
+UPDATE weather SET (temp_lo, temp_hi, prcp) = (temp_lo+1, temp_lo+15, DEFAULT)
+  WHERE city = 'San Francisco' AND date = '2003-07-03'
+----
+UPDATE weather
+SET ( temp_lo, temp_hi, prcp ) = ( temp_lo + 1, temp_lo + 15, DEFAULT )
+WHERE city = 'San Francisco'
+      AND date = '2003-07-03'
+----
+
+++++
+UPDATE with single column multi-assign
+----
+UPDATE weather SET (temp_lo) = (temp_lo+1)
+----
+UPDATE weather
+SET temp_lo = temp_lo + 1
+----
+
+++++
+UPDATE with FROM and WHERE
+----
+UPDATE employees SET sales_count = sales_count + 1 FROM accounts
+  WHERE accounts.name = 'Acme Corporation'
+  AND employees.id = accounts.sales_person
+----
+UPDATE employees
+SET sales_count = sales_count + 1
+FROM accounts
+WHERE accounts.name = 'Acme Corporation'
+      AND employees.id = accounts.sales_person
+----
+
+++++
+UPDATE with subselect in WHERE
+----
+UPDATE employees SET sales_count = sales_count + 1 WHERE id =
+  (SELECT sales_person FROM accounts WHERE name = 'Acme Corporation')
+----
+UPDATE employees
+SET sales_count = sales_count + 1
+WHERE id = (
+          SELECT sales_person
+          FROM accounts
+          WHERE name = 'Acme Corporation'
+      )
+----
+
+++++
+UPDATE with multi-assign with SELECT on RHS
+----
+UPDATE accounts SET (contact_first_name, contact_last_name) =
+    (SELECT first_name, last_name FROM salesmen
+     WHERE salesmen.id = accounts.sales_id)
+----
+UPDATE accounts
+SET ( contact_first_name, contact_last_name ) = (
+        SELECT first_name, last_name
+        FROM salesmen
+        WHERE salesmen.id = accounts.sales_id
+    )
+----
+
+++++
+UDPATE with WHERE CURRENT OF
+----
+UPDATE films SET kind = 'Dramatic' WHERE CURRENT OF c_films
+----
+UPDATE films
+SET kind = 'Dramatic'
+WHERE CURRENT OF c_films
+----

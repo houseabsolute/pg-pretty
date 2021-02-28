@@ -462,7 +462,7 @@ my %not_optional = (
         qw(
             lexpr
             rexpr
-            )
+        )
     ],
     AIndirection               => 'arg',
     Alias                      => 'aliasname',
@@ -481,13 +481,13 @@ my %not_optional = (
         qw(
             boolop
             args
-            )
+        )
     ],
     ColumnDef => [
         qw(
             colname
             typeName
-            )
+        )
     ],
     CompositeTypeStmt => 'coldeflist',
     CopyStmt          => 'options',
@@ -495,13 +495,13 @@ my %not_optional = (
         qw(
             domainname
             constraints
-            )
+        )
     ],
     CreateEnumStmt => [
         qw(
             typeName
             vals
-            )
+        )
     ],
     CreateExtensionStmt => 'options',
     CreateFunctionStmt  => [
@@ -509,8 +509,9 @@ my %not_optional = (
             funcname
             options
             returnType
-            )
+        )
     ],
+    CurrentOfExpr     => 'cursor_name',
     FuncCall          => 'funcname',
     FunctionParameter => 'argType',
     InsertStmt        => 'relation',
@@ -519,9 +520,16 @@ my %not_optional = (
             jointype
             larg
             rarg
-            )
+        )
     ],
-    LockingClause    => 'strength',
+    LockingClause  => 'strength',
+    MultiAssignRef => [
+        qw(
+            source
+            colno
+            ncolumns
+        )
+    ],
     OnConflictClause => 'action',
     RangeSubselect   => 'subquery',
     RangeTableSample => [
@@ -529,36 +537,42 @@ my %not_optional = (
             relation
             method
             args
-            )
+        )
     ],
     RangeVar => 'relname',
     RowExpr  => [
         qw(
             args
             row_format
-            )
+        )
     ],
     SortBy => [
         qw(
             node
             sortby_dir
             sortby_nulls
-            )
+        )
     ],
     SubLink => [
         qw(
             subLinkType
             subselect
-            )
+        )
     ],
     TypeCast => [
         qw(
             arg
             typeName
-            )
+        )
     ],
-    TypeName => 'names',
-    Value    => 'val',
+    TypeName   => 'names',
+    UpdateStmt => [
+        qw(
+            relation
+            targetList
+        )
+    ],
+    Value => 'val',
 );
 $not_optional{$_}
     = { map { $_ => 1 }

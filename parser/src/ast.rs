@@ -1832,7 +1832,7 @@ pub struct CurrentOfExpr {
     // RT index of target relation
     pub cvarno: Option<Index>, // Index
     // name of referenced cursor, or NULL
-    pub cursor_name: Option<String>, // char*
+    pub cursor_name: String, // char*
     // refcursor parameter number, or 0
     pub cursor_param: Option<i64>, // int
 }
@@ -2634,11 +2634,11 @@ pub struct MinMaxExpr {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct MultiAssignRef {
     // the row-valued expression
-    pub source: Option<Box<Node>>, // Node*
+    pub source: Box<Node>, // Node*
     // column number for this target (1..n)
-    pub colno: Option<i64>, // int
+    pub colno: i64, // int
     // number of targets in the construct
-    pub ncolumns: Option<i64>, // int
+    pub ncolumns: i64, // int
 }
 
 // NamedArgExpr - a named argument of a function
@@ -4274,10 +4274,10 @@ pub struct UnlistenStmt {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct UpdateStmt {
     // relation to update
-    pub relation: Option<RangeVarWrapper>, // RangeVar*
+    pub relation: RangeVarWrapper, // RangeVar*
     // the target list (of ResTarget)
     #[serde(rename = "targetList")]
-    pub target_list: Option<List>, // List*
+    pub target_list: List, // List*
     // qualifications
     #[serde(rename = "whereClause")]
     pub where_clause: Option<Box<Node>>, // Node*
