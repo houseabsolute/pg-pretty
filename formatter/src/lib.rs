@@ -285,28 +285,24 @@ impl Formatter {
         if self.most_recent_stmt_is(ContextType::UpdateStmt)
             || self.last_context_is(ContextType::OnConflictUpdate)
         {
-            match &rt.name {
+            return match &rt.name {
                 Some(n) => match &rt.val {
-                    Some(v) => {
-                        return Ok(format!(
-                            "{} = {}",
-                            self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref())?,
-                            self.format_node(&*v)?,
-                        ))
-                    }
-                    None => return Err(FormatterError::UpdateResTargetWithoutVal),
+                    Some(v) => Ok(format!(
+                        "{} = {}",
+                        self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref())?,
+                        self.format_node(&*v)?,
+                    )),
+                    None => Err(FormatterError::UpdateResTargetWithoutVal),
                 },
-                None => return Err(FormatterError::ResTargetWithoutName { what: "UPDATE" }),
-            }
+                None => Err(FormatterError::ResTargetWithoutName { what: "UPDATE" }),
+            };
         } else if self.most_recent_stmt_is(ContextType::InsertStmt)
             && !self.last_context_is(ContextType::InsertReturning)
         {
-            match &rt.name {
-                Some(n) => {
-                    return self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref())
-                }
-                None => return Err(FormatterError::ResTargetWithoutName { what: "INSERT" }),
-            }
+            return match &rt.name {
+                Some(n) => self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref()),
+                None => Err(FormatterError::ResTargetWithoutName { what: "INSERT" }),
+            };
         }
 
         if let Some(v) = &rt.val {
