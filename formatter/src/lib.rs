@@ -6,22 +6,18 @@ use thiserror::Error;
 //use trace::trace;
 
 #[derive(Debug, Error)]
-pub enum Error {
-    #[error("unexpected node {:?} in {}", .node, .func)]
+pub enum FormatterError {
+    #[error("unexpected node {node:?} in {func}")]
     UnexpectedNode { node: String, func: &'static str },
     #[error("no target list for select")]
     NoTargetListForSelect,
-    #[error("missing {} arg for {} op", .side, .op)]
+    #[error("missing {side} arg for {op} op")]
     MissingSideForOp { side: &'static str, op: String },
-    #[error("join type is {} but there is no Pg keyword for this", jt)]
+    #[error("join type is {jt} but there is no Pg keyword for this")]
     InexpressibleJoinType { jt: String },
     #[error("join type is inner but is not natual and has no qualifiers or using clause")]
     InvalidInnerJoin,
-    #[error(
-        "cannot mix join strategies but found {} and {} in the FROM clause",
-        strat1,
-        strat2
-    )]
+    #[error("cannot mix join strategies but found {strat1} and {strat2} in the FROM clause")]
     CannotMixJoinStrategies {
         strat1: &'static str,
         strat2: &'static str,
@@ -32,13 +28,13 @@ pub enum Error {
     RangeFunctionDoesNotHaveAnyFunctions,
     #[error("range function's list of func calls contains a non-FuncCall node")]
     RangeFunctionHasNonFuncCallFunction,
-    #[error("frame options specified {} but did not contain a value", opt)]
+    #[error("frame options specified {opt} but did not contain a value")]
     FrameOptionsValueWithoutOffset { opt: String },
     #[error("select contained a res target without a val")]
     SelectResTargetWithoutVal,
     #[error("update contained a res target without a val")]
     UpdateResTargetWithoutVal,
-    #[error("{} contained a res target without a name", what)]
+    #[error("{what} contained a res target without a name")]
     ResTargetWithoutName { what: &'static str },
     #[error("index element has no name or expression")]
     IndexElemWithoutNameOrExpr,
@@ -82,7 +78,7 @@ pub struct Formatter {
     type_renaming: HashMap<String, String>,
 }
 
-type R = Result<String, Error>;
+type R = Result<String, FormatterError>;
 
 //trace::init_depth_var!();
 
@@ -135,7 +131,7 @@ impl Formatter {
             Node::SubLink(s) => self.format_sub_link(s),
             Node::TypeCast(t) => self.format_type_cast(t),
             Node::WindowDef(w) => self.format_window_def(w, 0),
-            _ => Err(Error::UnexpectedNode {
+            _ => Err(FormatterError::UnexpectedNode {
                 node: node.to_string(),
                 func: "format_node",
             }),
@@ -174,14 +170,14 @@ impl Formatter {
                     let SelectStmtWrapper::SelectStmt(l) = &**l;
                     formatter.format_select_stmt(l)?
                 }
-                None => return Err(Error::MissingSideForOp { side: "left", op }),
+                None => return Err(FormatterError::MissingSideForOp { side: "left", op }),
             };
             let right = match &s.rarg {
                 Some(r) => {
                     let SelectStmtWrapper::SelectStmt(r) = &**r;
                     formatter.format_select_stmt(r)?
                 }
-                None => return Err(Error::MissingSideForOp { side: "left", op }),
+                None => return Err(FormatterError::MissingSideForOp { side: "left", op }),
             };
 
             if s.all {
@@ -193,7 +189,7 @@ impl Formatter {
 
         let t = match &s.target_list {
             Some(tl) => tl,
-            None => return Err(Error::NoTargetListForSelect),
+            None => return Err(FormatterError::NoTargetListForSelect),
         };
         let mut select = formatter.format_select_clause(t, s.distinct_clause.as_ref())?;
         if let Some(f) = &s.from_clause {
@@ -275,7 +271,7 @@ impl Formatter {
     fn format_target_element(&mut self, t: &Node) -> R {
         match &t {
             Node::ResTarget(rt) => self.format_res_target(rt),
-            _ => Err(Error::UnexpectedNode {
+            _ => Err(FormatterError::UnexpectedNode {
                 node: t.to_string(),
                 func: "format_target_element",
             }),
@@ -298,9 +294,9 @@ impl Formatter {
                             self.format_node(&*v)?,
                         ))
                     }
-                    None => return Err(Error::UpdateResTargetWithoutVal),
+                    None => return Err(FormatterError::UpdateResTargetWithoutVal),
                 },
-                None => return Err(Error::ResTargetWithoutName { what: "UPDATE" }),
+                None => return Err(FormatterError::ResTargetWithoutName { what: "UPDATE" }),
             }
         } else if self.most_recent_stmt_is(ContextType::InsertStmt)
             && !self.last_context_is(ContextType::InsertReturning)
@@ -309,7 +305,7 @@ impl Formatter {
                 Some(n) => {
                     return self.format_name_and_maybe_indirection(&n, rt.indirection.as_ref())
                 }
-                None => return Err(Error::ResTargetWithoutName { what: "INSERT" }),
+                None => return Err(FormatterError::ResTargetWithoutName { what: "INSERT" }),
             }
         }
 
@@ -321,7 +317,7 @@ impl Formatter {
             return Ok(target);
         }
 
-        Err(Error::SelectResTargetWithoutVal)
+        Err(FormatterError::SelectResTargetWithoutVal)
     }
 
     //#[trace]
@@ -791,7 +787,7 @@ impl Formatter {
             if let Some(o) = &w.start_offset {
                 range.push(self.format_node(&*o)?);
             } else {
-                return Err(Error::FrameOptionsValueWithoutOffset {
+                return Err(FormatterError::FrameOptionsValueWithoutOffset {
                     opt: format!("START {}", direction),
                 });
             }
@@ -822,7 +818,7 @@ impl Formatter {
             if let Some(o) = &w.end_offset {
                 range.push(self.format_node(&*o)?);
             } else {
-                return Err(Error::FrameOptionsValueWithoutOffset {
+                return Err(FormatterError::FrameOptionsValueWithoutOffset {
                     opt: format!("END {}", direction),
                 });
             }
@@ -984,7 +980,7 @@ impl Formatter {
             }
         };
 
-        let maker = |f: &mut Self| -> Result<Vec<String>, Error> {
+        let maker = |f: &mut Self| -> Result<Vec<String>, FormatterError> {
             Ok(f.formatted_list(&members)?
                 .into_iter()
                 .map(|g| {
@@ -1045,20 +1041,20 @@ impl Formatter {
 
         if j.is_natural {
             if j.quals.is_some() {
-                return Err(Error::CannotMixJoinStrategies {
+                return Err(FormatterError::CannotMixJoinStrategies {
                     strat1: "NATURAL",
                     strat2: "ON",
                 });
             }
             if j.using_clause.is_some() {
-                return Err(Error::CannotMixJoinStrategies {
+                return Err(FormatterError::CannotMixJoinStrategies {
                     strat1: "NATURAL",
                     strat2: "USING",
                 });
             }
         }
         if j.quals.is_some() && j.using_clause.is_some() {
-            return Err(Error::CannotMixJoinStrategies {
+            return Err(FormatterError::CannotMixJoinStrategies {
                 strat1: "ON",
                 strat2: "USING",
             });
@@ -1098,7 +1094,7 @@ impl Formatter {
         Ok(e)
     }
 
-    fn join_type(&self, j: &JoinExpr) -> Result<String, Error> {
+    fn join_type(&self, j: &JoinExpr) -> Result<String, FormatterError> {
         let jt = match &j.jointype {
             JoinType::JoinInner => {
                 if j.quals.is_some() || j.using_clause.is_some() || j.is_natural {
@@ -1111,7 +1107,7 @@ impl Formatter {
             JoinType::JoinRight => "RIGHT OUTER JOIN",
             JoinType::JoinFull => "FULL OUTER JOIN",
             _ => {
-                return Err(Error::InexpressibleJoinType {
+                return Err(FormatterError::InexpressibleJoinType {
                     jt: j.jointype.to_string(),
                 })
             }
@@ -1291,7 +1287,7 @@ impl Formatter {
                                 f.contexts.pop();
                                 el.push_str(&res?.join(" "));
                             }
-                            None => return Err(Error::OrderByUsingWithoutOp),
+                            None => return Err(FormatterError::OrderByUsingWithoutOp),
                         }
                     }
                 }
@@ -1375,7 +1371,7 @@ impl Formatter {
     fn format_range_function(&mut self, rf: &RangeFunction) -> R {
         let funcs = &rf.functions;
         if funcs.is_empty() {
-            return Err(Error::RangeFunctionDoesNotHaveAnyFunctions);
+            return Err(FormatterError::RangeFunctionDoesNotHaveAnyFunctions);
         }
 
         let mut prefix = if rf.lateral {
@@ -1405,7 +1401,7 @@ impl Formatter {
                         }
                         Ok(c)
                     }
-                    _ => Err(Error::RangeFunctionHasNonFuncCallFunction),
+                    _ => Err(FormatterError::RangeFunctionHasNonFuncCallFunction),
                 })
                 .collect::<Result<Vec<_>, _>>()
         };
@@ -1621,12 +1617,12 @@ impl Formatter {
                 return Ok(on_conflict);
             }
             OnConflictAction::OnconflictUpdate => (),
-            _ => return Err(Error::OnConflictClauseWithUnknownAction),
+            _ => return Err(FormatterError::OnConflictClauseWithUnknownAction),
         }
 
         let targets = match occ.target_list.as_ref() {
             Some(t) => t,
-            None => return Err(Error::OnConflictUpdateWithoutTargets),
+            None => return Err(FormatterError::OnConflictUpdateWithoutTargets),
         };
 
         let do_update = "DO UPDATE SET ";
@@ -1656,7 +1652,7 @@ impl Formatter {
         } else if let Some(c) = &i.conname {
             infer = format!("ON CONSTRAINT {}", c);
         } else {
-            return Err(Error::InferClauseWithoutIndexElementsOrConstraint);
+            return Err(FormatterError::InferClauseWithoutIndexElementsOrConstraint);
         }
 
         Ok(infer)
@@ -1673,7 +1669,7 @@ impl Formatter {
         } else if let Some(e) = &i.expr {
             elem.push_str(&self.format_node(&*e)?);
         } else {
-            return Err(Error::IndexElemWithoutNameOrExpr);
+            return Err(FormatterError::IndexElemWithoutNameOrExpr);
         }
 
         if let Some(c) = &i.collation {
@@ -1693,7 +1689,7 @@ impl Formatter {
         &mut self,
         target_list: &[Node],
         prefix: &str,
-    ) -> Result<String, Error> {
+    ) -> Result<String, FormatterError> {
         self.contexts.push(ContextType::OnConflictUpdate);
         let mut formatter = guard(self, |s| {
             s.contexts.pop();
@@ -1719,7 +1715,7 @@ impl Formatter {
         mut items_maker: F,
     ) -> R
     where
-        F: FnMut(&mut Self) -> Result<Vec<String>, Error>,
+        F: FnMut(&mut Self) -> Result<Vec<String>, FormatterError>,
     {
         let mut one_line = prefix.to_string();
         if indent_prefix {
@@ -1773,7 +1769,7 @@ impl Formatter {
         mut items_maker: F,
     ) -> R
     where
-        F: FnMut(&mut Self) -> Result<Vec<String>, Error>,
+        F: FnMut(&mut Self) -> Result<Vec<String>, FormatterError>,
     {
         let mut many = prefix.to_string();
         if indent_prefix {
@@ -1857,7 +1853,7 @@ impl Formatter {
         Ok(self.formatted_list(v)?.join(joiner))
     }
 
-    fn formatted_list(&mut self, v: &[Node]) -> Result<Vec<String>, Error> {
+    fn formatted_list(&mut self, v: &[Node]) -> Result<Vec<String>, FormatterError> {
         v.iter()
             .map(|n| self.format_node(n))
             .collect::<Result<Vec<_>, _>>()

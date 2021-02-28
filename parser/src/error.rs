@@ -28,11 +28,11 @@ impl fmt::Display for ParseError {
 pub enum PGQueryError {
     #[error("could not parse C string into Rust UTF-8 string")]
     ParsingCString,
-    #[error("could not parse JSON from libpg_query: {}\n{}", .0, .1)]
+    #[error("could not parse JSON from libpg_query: {0}\n{1}")]
     JsonParse(String, String),
     #[error("could not convert query string to C string")]
     QueryToCString,
-    #[error("libpg_query returned an error from parsing the string: {}", .0)]
+    #[error("libpg_query returned an error from parsing the string: {0}")]
     PGParseError(ParseError),
 }
 
