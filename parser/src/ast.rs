@@ -1903,7 +1903,7 @@ pub struct DefineStmt {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct DeleteStmt {
     // relation to delete from
-    pub relation: Option<RangeVarWrapper>, // RangeVar*
+    pub relation: RangeVarWrapper, // RangeVar*
     // optional using clause for more tables
     #[serde(rename = "usingClause")]
     pub using_clause: Option<List>, // List*

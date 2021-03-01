@@ -511,7 +511,12 @@ my %not_optional = (
             returnType
         )
     ],
-    CurrentOfExpr     => 'cursor_name',
+    CurrentOfExpr => 'cursor_name',
+    DeleteStmt    => [
+        qw(
+            relation
+        )
+    ],
     FuncCall          => 'funcname',
     FunctionParameter => 'argType',
     InsertStmt        => 'relation',

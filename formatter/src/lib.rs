@@ -119,6 +119,7 @@ impl Formatter {
             Node::BoolExpr(b) => self.format_bool_expr(b),
             Node::ColumnRef(c) => Ok(self.format_column_ref(c)),
             Node::CurrentOfExpr(c) => Ok(self.format_current_of_expr(c)),
+            Node::DeleteStmt(d) => self.format_delete_stmt(d),
             Node::FuncCall(f) => self.format_func_call(f),
             Node::GroupingSet(g) => self.format_grouping_set(g),
             Node::IndexElem(i) => self.format_index_elem(i),
@@ -195,7 +196,7 @@ impl Formatter {
         };
         let mut select = formatter.format_select_clause(t, s.distinct_clause.as_ref())?;
         if let Some(f) = &s.from_clause {
-            select.push_str(&formatter.format_from_clause(f)?);
+            select.push_str(&formatter.format_from_clause("FROM", f)?);
         }
         if let Some(w) = &s.where_clause {
             select.push_str(&formatter.format_where_clause(w)?);
@@ -1003,13 +1004,13 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_from_clause(&mut self, fc: &[Node]) -> R {
-        let start = "FROM ";
-        let mut from = self.indent_str("FROM ");
+    fn format_from_clause(&mut self, keyword: &str, fc: &[Node]) -> R {
+        let start = format!("{} ", keyword);
+        let mut from = self.indent_str(&start);
 
-        // We want to indent by the width of "FROM ", not any additional
-        // indent before that string.
-        self.push_indent_from_str(start);
+        // We want to indent by the width of "FROM " or "USING ", not any
+        // additional indent before that string.
+        self.push_indent_from_str(&start);
         for (n, f) in fc.iter().enumerate() {
             if n > 0 {
                 from.push_str(",\n");
@@ -1727,7 +1728,7 @@ impl Formatter {
         update.push('\n');
 
         if let Some(f) = &u.from_clause {
-            update.push_str(&formatter.format_from_clause(f)?);
+            update.push_str(&formatter.format_from_clause("FROM", f)?);
         }
         if let Some(w) = &u.where_clause {
             update.push_str(&formatter.format_where_clause(w)?);
@@ -1801,6 +1802,25 @@ impl Formatter {
         let right = self.format_node(&*m.source)?;
 
         Ok(format!("{} = {}", left, right))
+    }
+
+    //#[trace]
+    fn format_delete_stmt(&mut self, d: &DeleteStmt) -> R {
+        let RangeVarWrapper::RangeVar(r) = &d.relation;
+
+        let mut delete = self.indent_str(&format!("DELETE FROM {}\n", self.format_range_var(r)));
+
+        if let Some(u) = &d.using_clause {
+            delete.push_str(&self.format_from_clause("USING", u)?);
+        }
+        if let Some(w) = &d.where_clause {
+            delete.push_str(&self.format_where_clause(w)?);
+        }
+        if let Some(r) = &d.returning_list {
+            delete.push_str(&self.format_returning_clause(r)?);
+        }
+
+        Ok(delete)
     }
 
     //#[trace(disable(items_maker))]
