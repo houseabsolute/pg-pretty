@@ -62,13 +62,11 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
 fn impl_serialize_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let gen = quote! {
-        use serde::{Serialize, Serializer};
-
         #[automatically_derived]
-        impl Serialize for #name {
+        impl serde::Serialize for #name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
-                S: Serializer,
+                S: serde::Serializer,
             {
                 serializer.serialize_u32(self.bits)
             }
@@ -88,13 +86,11 @@ fn impl_deserialize_macro(ast: &syn::DeriveInput) -> TokenStream {
     let visitor_name = format_ident!("{}Visitor", name);
     let visitor = visitor_for(&name, &visitor_name);
     let gen = quote! {
-        use serde::{Deserialize, Deserializer};
-
         #[automatically_derived]
-        impl<'de> Deserialize<'de> for #name {
+        impl<'de> serde::Deserialize<'de> for #name {
             fn deserialize<D>(deserializer: D) -> Result<#name, D::Error>
             where
-                D: Deserializer<'de>,
+                D: serde::Deserializer<'de>,
             {
                 deserializer.deserialize_u32(#visitor_name)
             }
@@ -107,16 +103,13 @@ fn impl_deserialize_macro(ast: &syn::DeriveInput) -> TokenStream {
 
 fn visitor_for(name: &Ident, visitor_name: &Ident) -> proc_macro2::TokenStream {
     quote! {
-        use serde::de::{self, Visitor};
-        use std::fmt;
-
         struct #visitor_name;
 
         #[automatically_derived]
         impl #visitor_name {
             fn new_bitflags_struct<E>(value: u32) -> Result<#name, E>
             where
-                E: de::Error,
+                E: serde::de::Error,
             {
                 match #name::from_bits(value) {
                     Some(fo) => Ok(fo),
@@ -129,16 +122,16 @@ fn visitor_for(name: &Ident, visitor_name: &Ident) -> proc_macro2::TokenStream {
         }
 
         #[automatically_derived]
-        impl<'de> Visitor<'de> for #visitor_name {
+        impl<'de> serde::de::Visitor<'de> for #visitor_name {
             type Value = #name;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("an unsigned 64-bit integer")
             }
 
             fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
             where
-                E: de::Error,
+                E: serde::de::Error,
             {
                 if value > u32::MAX.into() {
                     Err(E::custom(format!(
@@ -153,7 +146,7 @@ fn visitor_for(name: &Ident, visitor_name: &Ident) -> proc_macro2::TokenStream {
 
             fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
             where
-                E: de::Error,
+                E: serde::de::Error,
             {
                 if value < u32::MIN.into() {
                     Err(E::custom(format!(
