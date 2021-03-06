@@ -113,26 +113,29 @@ impl Formatter {
     //#[trace]
     fn format_node(&mut self, node: &Node) -> R {
         match &node {
+            // CRUD statements
+            Node::DeleteStmt(d) => self.format_delete_stmt(d),
+            Node::InsertStmt(i) => self.format_insert_stmt(i),
+            Node::SelectStmt(s) => self.format_select_stmt(s),
+            Node::UpdateStmt(u) => self.format_update_stmt(u),
+
+            // expressions
             Node::AConst(a) => Ok(self.format_a_const(a)),
             Node::AExpr(a) => self.format_a_expr(a),
             Node::AIndirection(a) => self.format_a_indirection(a),
             Node::BoolExpr(b) => self.format_bool_expr(b),
             Node::ColumnRef(c) => Ok(self.format_column_ref(c)),
             Node::CurrentOfExpr(c) => Ok(self.format_current_of_expr(c)),
-            Node::DeleteStmt(d) => self.format_delete_stmt(d),
             Node::FuncCall(f) => self.format_func_call(f),
             Node::GroupingSet(g) => self.format_grouping_set(g),
             Node::IndexElem(i) => self.format_index_elem(i),
-            Node::InsertStmt(i) => self.format_insert_stmt(i),
             Node::RangeVar(r) => Ok(self.format_range_var(r)),
             Node::ResTarget(r) => self.format_res_target(r),
             Node::RowExpr(r) => self.format_row_expr(r),
-            Node::SelectStmt(s) => self.format_select_stmt(s),
             Node::SetToDefault(_) => Ok("DEFAULT".to_string()),
             Node::StringStruct(s) => Ok(self.format_string(&s.str)),
             Node::SubLink(s) => self.format_sub_link(s),
             Node::TypeCast(t) => self.format_type_cast(t),
-            Node::UpdateStmt(u) => self.format_update_stmt(u),
             Node::WindowDef(w) => self.format_window_def(w, 0),
             _ => Err(FormatterError::UnexpectedNode {
                 node: node.to_string(),
@@ -141,21 +144,82 @@ impl Formatter {
         }
     }
 
-    fn format_string(&self, s: &str) -> String {
-        // Depending on the context the string may be a string literal or it
-        // may something like an operator. Tracking the context seems to be
-        // the only way to figure that out. I have no idea if this actually
-        // works in practice though ...
-        match self.contexts.last() {
-            Some(c) => match c {
-                ContextType::AExpr(_)
-                | ContextType::OrderByUsingClause
-                | ContextType::RangeTableSample
-                | ContextType::SubLink => s.to_string(),
-                _ => self.quote_string(&s),
-            },
-            None => self.quote_string(&s),
+    //#[trace]
+    fn format_delete_stmt(&mut self, d: &DeleteStmt) -> R {
+        let RangeVarWrapper::RangeVar(r) = &d.relation;
+
+        let mut delete = self.indent_str(&format!("DELETE FROM {}\n", self.format_range_var(r)));
+
+        if let Some(u) = &d.using_clause {
+            delete.push_str(&self.format_from_clause("USING", u)?);
         }
+        if let Some(w) = &d.where_clause {
+            delete.push_str(&self.format_where_clause(w)?);
+        }
+        if let Some(r) = &d.returning_list {
+            delete.push_str(&self.format_returning_clause(r)?);
+        }
+
+        Ok(delete)
+    }
+
+    //#[trace]
+    fn format_insert_stmt(&mut self, i: &InsertStmt) -> R {
+        self.contexts.push(ContextType::InsertStmt);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        let RangeVarWrapper::RangeVar(r) = &i.relation;
+
+        let mut insert = formatter.indent_str("INSERT INTO\n");
+
+        formatter.push_indent_one_level();
+
+        let mut prefix = formatter.indent_str(&formatter.format_range_var(r));
+
+        if let Some(cols) = &i.cols {
+            prefix.push(' ');
+            let maker = |f: &mut Self| {
+                cols.iter()
+                    .map(|ResTargetWrapper::ResTarget(c)| f.format_res_target(c))
+                    .collect::<Result<Vec<_>, _>>()
+            };
+            insert.push_str(&formatter.one_line_or_many(&prefix, false, true, true, 0, maker)?);
+        } else {
+            insert.push_str(&prefix);
+        }
+        insert.push('\n');
+
+        formatter.pop_indent();
+
+        if let Some(o) = &i.r#override {
+            match o {
+                OverridingKind::OverridingSystemValue => {
+                    insert.push_str("OVERRIDING SYSTEM VALUE\n")
+                }
+                OverridingKind::OverridingUserValue => insert.push_str("OVERRIDING USER VALUE\n"),
+                _ => (),
+            }
+        }
+
+        insert.push_str(&formatter.format_insert_values(&i)?);
+
+        if let Some(OnConflictClauseWrapper::OnConflictClause(occ)) = &i.on_conflict_clause {
+            insert.push_str(&formatter.format_on_conflict_clause(occ)?);
+        }
+
+        // If this is an INSERT ... SELECT without an ON CONFLICT clause then
+        // it already has a newline.
+        if !insert.ends_with('\n') {
+            insert.push('\n');
+        }
+
+        if let Some(r) = &i.returning_list {
+            insert.push_str(&formatter.format_returning_clause(r)?);
+        }
+
+        Ok(insert)
     }
 
     //#[trace]
@@ -222,13 +286,34 @@ impl Formatter {
         Ok(select)
     }
 
-    fn match_op(&self, op: &SetOperation) -> Option<String> {
-        match op {
-            SetOperation::SetopUnion => Some("UNION".to_string()),
-            SetOperation::SetopIntersect => Some("INTERSECT".to_string()),
-            SetOperation::SetopExcept => Some("EXCEPT".to_string()),
-            SetOperation::SetopNone => None,
+    //#[trace]
+    fn format_update_stmt(&mut self, u: &UpdateStmt) -> R {
+        self.contexts.push(ContextType::UpdateStmt);
+        let mut formatter = guard(self, |s| {
+            s.contexts.pop();
+        });
+
+        let RangeVarWrapper::RangeVar(r) = &u.relation;
+
+        let mut update =
+            formatter.indent_str(&format!("UPDATE {}\n", formatter.format_range_var(r)));
+
+        let maker = |f: &mut Formatter| f.update_stmt_res_target_lines(&u.target_list);
+
+        update.push_str(&formatter.many_lines("SET ", false, false, true, maker)?);
+        update.push('\n');
+
+        if let Some(f) = &u.from_clause {
+            update.push_str(&formatter.format_from_clause("FROM", f)?);
         }
+        if let Some(w) = &u.where_clause {
+            update.push_str(&formatter.format_where_clause(w)?);
+        }
+        if let Some(r) = &u.returning_list {
+            update.push_str(&formatter.format_returning_clause(r)?);
+        }
+
+        Ok(update)
     }
 
     //#[trace]
@@ -268,6 +353,32 @@ impl Formatter {
             "{}\n",
             self.one_line_or_many(&prefix, true, false, true, 0, maker)?
         ))
+    }
+
+    fn format_string(&self, s: &str) -> String {
+        // Depending on the context the string may be a string literal or it
+        // may something like an operator. Tracking the context seems to be
+        // the only way to figure that out. I have no idea if this actually
+        // works in practice though ...
+        match self.contexts.last() {
+            Some(c) => match c {
+                ContextType::AExpr(_)
+                | ContextType::OrderByUsingClause
+                | ContextType::RangeTableSample
+                | ContextType::SubLink => s.to_string(),
+                _ => self.quote_string(&s),
+            },
+            None => self.quote_string(&s),
+        }
+    }
+
+    fn match_op(&self, op: &SetOperation) -> Option<String> {
+        match op {
+            SetOperation::SetopUnion => Some("UNION".to_string()),
+            SetOperation::SetopIntersect => Some("INTERSECT".to_string()),
+            SetOperation::SetopExcept => Some("EXCEPT".to_string()),
+            SetOperation::SetopNone => None,
+        }
     }
 
     //#[trace]
@@ -1477,65 +1588,6 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_insert_stmt(&mut self, i: &InsertStmt) -> R {
-        self.contexts.push(ContextType::InsertStmt);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
-
-        let RangeVarWrapper::RangeVar(r) = &i.relation;
-
-        let mut insert = formatter.indent_str("INSERT INTO\n");
-
-        formatter.push_indent_one_level();
-
-        let mut prefix = formatter.indent_str(&formatter.format_range_var(r));
-
-        if let Some(cols) = &i.cols {
-            prefix.push(' ');
-            let maker = |f: &mut Self| {
-                cols.iter()
-                    .map(|ResTargetWrapper::ResTarget(c)| f.format_res_target(c))
-                    .collect::<Result<Vec<_>, _>>()
-            };
-            insert.push_str(&formatter.one_line_or_many(&prefix, false, true, true, 0, maker)?);
-        } else {
-            insert.push_str(&prefix);
-        }
-        insert.push('\n');
-
-        formatter.pop_indent();
-
-        if let Some(o) = &i.r#override {
-            match o {
-                OverridingKind::OverridingSystemValue => {
-                    insert.push_str("OVERRIDING SYSTEM VALUE\n")
-                }
-                OverridingKind::OverridingUserValue => insert.push_str("OVERRIDING USER VALUE\n"),
-                _ => (),
-            }
-        }
-
-        insert.push_str(&formatter.format_insert_values(&i)?);
-
-        if let Some(OnConflictClauseWrapper::OnConflictClause(occ)) = &i.on_conflict_clause {
-            insert.push_str(&formatter.format_on_conflict_clause(occ)?);
-        }
-
-        // If this is an INSERT ... SELECT without an ON CONFLICT clause then
-        // it already has a newline.
-        if !insert.ends_with('\n') {
-            insert.push('\n');
-        }
-
-        if let Some(r) = &i.returning_list {
-            insert.push_str(&formatter.format_returning_clause(r)?);
-        }
-
-        Ok(insert)
-    }
-
-    //#[trace]
     fn format_insert_values(&mut self, i: &InsertStmt) -> R {
         match &i.select_stmt {
             Some(SelectStmtWrapper::SelectStmt(s)) => {
@@ -1710,36 +1762,6 @@ impl Formatter {
         Ok(returning)
     }
 
-    //#[trace]
-    fn format_update_stmt(&mut self, u: &UpdateStmt) -> R {
-        self.contexts.push(ContextType::UpdateStmt);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
-
-        let RangeVarWrapper::RangeVar(r) = &u.relation;
-
-        let mut update =
-            formatter.indent_str(&format!("UPDATE {}\n", formatter.format_range_var(r)));
-
-        let maker = |f: &mut Formatter| f.update_stmt_res_target_lines(&u.target_list);
-
-        update.push_str(&formatter.many_lines("SET ", false, false, true, maker)?);
-        update.push('\n');
-
-        if let Some(f) = &u.from_clause {
-            update.push_str(&formatter.format_from_clause("FROM", f)?);
-        }
-        if let Some(w) = &u.where_clause {
-            update.push_str(&formatter.format_where_clause(w)?);
-        }
-        if let Some(r) = &u.returning_list {
-            update.push_str(&formatter.format_returning_clause(r)?);
-        }
-
-        Ok(update)
-    }
-
     fn update_stmt_res_target_lines(
         &mut self,
         list: &[Node],
@@ -1802,25 +1824,6 @@ impl Formatter {
         let right = self.format_node(&*m.source)?;
 
         Ok(format!("{} = {}", left, right))
-    }
-
-    //#[trace]
-    fn format_delete_stmt(&mut self, d: &DeleteStmt) -> R {
-        let RangeVarWrapper::RangeVar(r) = &d.relation;
-
-        let mut delete = self.indent_str(&format!("DELETE FROM {}\n", self.format_range_var(r)));
-
-        if let Some(u) = &d.using_clause {
-            delete.push_str(&self.format_from_clause("USING", u)?);
-        }
-        if let Some(w) = &d.where_clause {
-            delete.push_str(&self.format_where_clause(w)?);
-        }
-        if let Some(r) = &d.returning_list {
-            delete.push_str(&self.format_returning_clause(r)?);
-        }
-
-        Ok(delete)
     }
 
     //#[trace(disable(items_maker))]
