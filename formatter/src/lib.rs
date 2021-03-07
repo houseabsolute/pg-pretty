@@ -68,6 +68,15 @@ impl ContextType {
     }
 }
 
+macro_rules! new_context {
+    ( $self:ident, $context:expr ) => {{
+        $self.contexts.push($context);
+        guard($self, |s| {
+            s.contexts.pop();
+        })
+    }};
+}
+
 #[derive(Debug)]
 pub struct Formatter {
     bool_expr_depth: u8,
@@ -165,10 +174,7 @@ impl Formatter {
 
     //#[trace]
     fn format_insert_stmt(&mut self, i: &InsertStmt) -> R {
-        self.contexts.push(ContextType::InsertStmt);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::InsertStmt);
 
         let RangeVarWrapper::RangeVar(r) = &i.relation;
 
@@ -224,10 +230,7 @@ impl Formatter {
 
     //#[trace]
     fn format_select_stmt(&mut self, s: &SelectStmt) -> R {
-        self.contexts.push(ContextType::SelectStmt);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::SelectStmt);
 
         if let Some(mut op) = formatter.match_op(&s.op) {
             // XXX - this is so gross. I think the unstable box matching
@@ -288,10 +291,7 @@ impl Formatter {
 
     //#[trace]
     fn format_update_stmt(&mut self, u: &UpdateStmt) -> R {
-        self.contexts.push(ContextType::UpdateStmt);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::UpdateStmt);
 
         let RangeVarWrapper::RangeVar(r) = &u.relation;
 
@@ -542,10 +542,7 @@ impl Formatter {
         };
         let current_p = self.operator_precedence(&a.name);
 
-        self.contexts.push(ContextType::AExpr(current_p));
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::AExpr(current_p));
 
         let op = match &a.kind {
             AExprKind::AExprParen => panic!("no idea how to handle AExprParen kind of AExpr"),
@@ -976,10 +973,7 @@ impl Formatter {
 
     //#[trace]
     fn format_sub_link(&mut self, s: &SubLink) -> R {
-        self.contexts.push(ContextType::SubLink);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::SubLink);
 
         let mut link = match &s.testexpr {
             Some(n) => formatter.format_node(&*n)?,
@@ -1064,10 +1058,7 @@ impl Formatter {
     fn format_grouping_set(&mut self, gs: &GroupingSet) -> R {
         let is_nested = self.is_in_context(ContextType::GroupingSet);
 
-        self.contexts.push(ContextType::GroupingSet);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::GroupingSet);
 
         if let GroupingSetKind::GroupingSetEmpty = gs.kind {
             return Ok(String::new());
@@ -1544,18 +1535,18 @@ impl Formatter {
 
     //#[trace]
     fn format_range_table_sample(&mut self, rts: &RangeTableSample) -> R {
-        self.contexts.push(ContextType::RangeTableSample);
+        let mut formatter = new_context!(self, ContextType::RangeTableSample);
 
-        let mut table_sample = self.format_node(&rts.relation)?;
+        let mut table_sample = formatter.format_node(&rts.relation)?;
         table_sample.push_str(" TABLESAMPLE ");
-        table_sample.push_str(&self.joined_list(&rts.method, ".")?);
+        table_sample.push_str(&formatter.joined_list(&rts.method, ".")?);
         table_sample.push('(');
-        table_sample.push_str(&self.joined_list(&rts.args, ", ")?);
+        table_sample.push_str(&formatter.joined_list(&rts.args, ", ")?);
         table_sample.push(')');
 
         if let Some(r) = &rts.repeatable {
             table_sample.push_str(" REPEATABLE (");
-            table_sample.push_str(&self.format_node(&*r)?);
+            table_sample.push_str(&formatter.format_node(&*r)?);
             table_sample.push(')');
         }
 
@@ -1733,10 +1724,7 @@ impl Formatter {
         target_list: &[Node],
         prefix: &str,
     ) -> Result<String, FormatterError> {
-        self.contexts.push(ContextType::OnConflictUpdate);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::OnConflictUpdate);
 
         let maker = |f: &mut Self| {
             target_list
@@ -1749,10 +1737,7 @@ impl Formatter {
 
     //#[trace]
     fn format_returning_clause(&mut self, r: &[Node]) -> R {
-        self.contexts.push(ContextType::Returning);
-        let mut formatter = guard(self, |s| {
-            s.contexts.pop();
-        });
+        let mut formatter = new_context!(self, ContextType::Returning);
 
         let maker = |f: &mut Self| f.formatted_list(r);
         let mut returning =
