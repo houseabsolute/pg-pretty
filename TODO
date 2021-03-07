@@ -1,0 +1,10 @@
+most CREATE
+all ALTER
+
+Test INTERVAL X TO Y
+Test INTERVAL(5) X TO SECOND
+Any other typemod/typmods?
+
+every constraint type
+
+option to transform "<>" => "!=" ?
