@@ -9,6 +9,7 @@ use autodie qw( :all );
 use experimental qw( signatures );
 use feature qw( postderef );
 
+use HTML::Entities qw( decode_entities );
 use Path::Tiny qw( path );
 use Path::Tiny::Rule;
 use SGML::Parser::OpenSP;
@@ -28,19 +29,32 @@ has source => (
     documentation => 'The directory containing the Postgres source',
 );
 
+has file => (
+    is            => 'ro',
+    isa           => 'Str',
+    documentation => 'A single file name to parse',
+);
+
 sub run ($self) {
     my $parser = SGML::Parser::OpenSP->new;
 
     my $cases_dir = path(qw( formatter tests cases potential ));
     $cases_dir->mkpath( 0, 0755 );
 
-    my $iter = Path::Tiny::Rule->new->name(qr/\.sgml$/)
+    my $file = $self->file;
+    my $iter
+        = Path::Tiny::Rule->new->name( $file ? qr/\Q$file\E$/ : qr/\.sgml$/ )
         ->iter( path( $self->source )->child(qw( doc src sgml )) );
+
     my $x = 0;
     while ( my $file = $iter->() ) {
+        say "parsing $file";
+
         my $handler = Handler->new;
         $parser->handler($handler);
-        $parser->parse( $file->stringify );
+
+        my $sgml = decode_entities( $file->slurp_utf8 );
+        $parser->parse_string($sgml);
 
         my @filtered = _filtered_sql( $handler->sql );
         next unless @filtered;
