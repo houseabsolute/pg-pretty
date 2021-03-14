@@ -64,7 +64,7 @@ fn impl_serialize_macro(ast: &syn::DeriveInput) -> TokenStream {
     let gen = quote! {
         #[automatically_derived]
         impl serde::Serialize for #name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            fn serialize<S>(&self, serializer: S) -> ::core::result::Result<S::Ok, S::Error>
             where
                 S: serde::Serializer,
             {
@@ -88,7 +88,7 @@ fn impl_deserialize_macro(ast: &syn::DeriveInput) -> TokenStream {
     let gen = quote! {
         #[automatically_derived]
         impl<'de> serde::Deserialize<'de> for #name {
-            fn deserialize<D>(deserializer: D) -> Result<#name, D::Error>
+            fn deserialize<D>(deserializer: D) -> ::core::result::Result<#name, D::Error>
             where
                 D: serde::Deserializer<'de>,
             {
@@ -107,7 +107,7 @@ fn visitor_for(name: &Ident, visitor_name: &Ident) -> proc_macro2::TokenStream {
 
         #[automatically_derived]
         impl #visitor_name {
-            fn new_bitflags_struct<E>(value: u32) -> Result<#name, E>
+            fn new_bitflags_struct<E>(value: ::core::primitive::u32) -> ::core::result::Result<#name, E>
             where
                 E: serde::de::Error,
             {
@@ -125,37 +125,37 @@ fn visitor_for(name: &Ident, visitor_name: &Ident) -> proc_macro2::TokenStream {
         impl<'de> serde::de::Visitor<'de> for #visitor_name {
             type Value = #name;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 formatter.write_str("an unsigned 64-bit integer")
             }
 
-            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            fn visit_u64<E>(self, value: ::core::primitive::u64) -> ::core::result::Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                if value > u32::MAX.into() {
+                if value > ::core::primitive::u32::MAX.into() {
                     Err(E::custom(format!(
                         "value is greater than u32 max value: {} > {}",
                         value,
-                        u32::MAX
+                        ::core::primitive::u32::MAX
                     )))
                 } else {
-                    Self::new_bitflags_struct(value as u32)
+                    Self::new_bitflags_struct(value as ::core::primitive::u32)
                 }
             }
 
-            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            fn visit_i64<E>(self, value: ::core::primitive::i64) -> ::core::result::Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                if value < u32::MIN.into() {
+                if value < ::core::primitive::u32::MIN.into() {
                     Err(E::custom(format!(
                         "value is less than u32 min value: {} < {}",
                         value,
-                        u32::MIN
+                        ::core::primitive::u32::MIN
                     )))
                 } else {
-                    Self::new_bitflags_struct(value as u32)
+                    Self::new_bitflags_struct(value as ::core::primitive::u32)
                 }
             }
         }
