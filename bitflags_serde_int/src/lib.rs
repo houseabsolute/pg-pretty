@@ -83,7 +83,7 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
 
 fn impl_deserialize_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
-    let visitor_name = format_ident!("{}Visitor", name);
+    let visitor_name = format_ident!("__BitflagsSerdeInt{}Visitor", name);
     let visitor = visitor_for(&name, &visitor_name);
     let gen = quote! {
         #[automatically_derived]
