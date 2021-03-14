@@ -29,6 +29,10 @@ pub fn parse_sql(sql: &str) -> Result<Vec<ast::Root>, PGQueryError> {
 
     let parse_tree = unsafe { CStr::from_ptr(pg_parse_result.parse_tree) }.to_str()?;
 
+    if std::env::var_os("PG_PRETTY_DEBUG_PARSE_JSON").is_some() {
+        println!("{}", parse_tree);
+    }
+
     let output = serde_json::from_str(parse_tree)
         .map_err(|e| PGQueryError::JsonParse(e.to_string(), parse_tree.to_string()));
 
