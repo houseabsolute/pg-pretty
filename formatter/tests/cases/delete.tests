@@ -33,7 +33,7 @@ WHERE kind <> 'Musical'
 ----
 
 ++++
-DELETE FROM files
+DELETE FROM films
 ----
 DELETE FROM films
 ----
