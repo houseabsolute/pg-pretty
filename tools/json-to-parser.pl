@@ -292,8 +292,10 @@ sub _one_enum ( $self, $name, $enum ) {
     $code .= "#[repr($int_type)]\n";
     $code .= "pub enum $rust_enum {\n";
 
-    for my $member ( $enum->{values}->@* ) {
-        next unless $member->{name};
+    # It would be nice to sort these, but the JSON parser simply encodes most
+    # enums as a number matching that particular variant's position in the
+    # enum definition.
+    for my $member ( grep { $_->{name} } $enum->{values}->@* ) {
         $code .= _clean_comment( $member->{comment}, q{    } )
             if ( $member->{comment} // q{} ) =~ /\S/;
         my $rust_member = $self->_rust_name( lc $member->{name} );
@@ -430,7 +432,9 @@ my %overrides = (
     AExpr        => { rexpr       => 'OneOrManyNodes' },
     Alias        => { colnames    => 'Option<Vec<StringStruct>>' },
     ColumnRef    => { fields      => 'Vec<ColumnRefField>' },
-    DefElem      => { arg         => 'DefElemArgs' },
+    Constraint   => { exclusions  => 'Option<Vec<Exclusion>>' },
+    CreateStmt   => { tableElts   => 'Option<Vec<CreateStmtElement>>' },
+    DefElem      => { arg         => 'ValueOrTypeName' },
     Float        => { str         => 'String' },
     InsertStmt   => {
         selectStmt => 'Option<SelectStmtWrapper>',
@@ -483,13 +487,9 @@ my %not_optional = (
             args
         )
     ],
-    ColumnDef => [
-        qw(
-            colname
-            typeName
-        )
-    ],
+    ColumnDef         => 'colname',
     CompositeTypeStmt => 'coldeflist',
+    Constraint        => 'contype',
     CopyStmt          => 'options',
     CreateDomainStmt  => [
         qw(
@@ -511,8 +511,15 @@ my %not_optional = (
             returnType
         )
     ],
+    CreateStmt    => 'relation',
     CurrentOfExpr => 'cursor_name',
-    DeleteStmt    => [
+    DefElem       => [
+        qw(
+            defname
+            arg
+        )
+    ],
+    DeleteStmt => [
         qw(
             relation
         )
@@ -535,7 +542,14 @@ my %not_optional = (
             ncolumns
         )
     ],
-    OnConflictClause => 'action',
+    OnConflictClause   => 'action',
+    PartitionBoundSpec => 'strategy',
+    PartitionSpec      => [
+        qw(
+            strategy
+            partParams
+        )
+    ],
     RangeSubselect   => 'subquery',
     RangeTableSample => [
         qw(
@@ -558,7 +572,8 @@ my %not_optional = (
             sortby_nulls
         )
     ],
-    SubLink => [
+    SQLValueFunction => 'op',
+    SubLink          => [
         qw(
             subLinkType
             subselect
@@ -570,7 +585,6 @@ my %not_optional = (
             typeName
         )
     ],
-    TypeName   => 'names',
     UpdateStmt => [
         qw(
             relation

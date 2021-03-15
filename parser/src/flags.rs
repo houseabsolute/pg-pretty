@@ -1,7 +1,10 @@
 // The libpg_query library doesn't expose these flags. See
 // https://github.com/lfittl/libpg_query/issues/77.
 use bitflags_serde_int::Deserialize_bitflags_int;
+use std::convert::TryFrom;
+use thiserror::Error;
 
+// Values come from src/include/nodes/parsenodes.h.
 bitflags! {
     #[derive(Deserialize_bitflags_int)]
     pub struct FrameOptions: u32 {
@@ -43,5 +46,74 @@ bitflags! {
 impl Default for FrameOptions {
     fn default() -> FrameOptions {
         FrameOptions::DEFAULTS
+    }
+}
+
+// Values come from src/include/utils/datetime.h.
+bitflags! {
+    pub struct IntervalMask: u32 {
+        const MONTH = 1 << 1;
+        const YEAR = 1 << 2;
+        const DAY = 1 << 3;
+        const HOUR = 1 << 10;
+        const MINUTE = 1 << 11;
+        const SECOND = 1 << 12;
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum IntervalMaskError {
+    #[error("{source:}")]
+    CannotConvertI64ToIntervalMask {
+        #[from]
+        source: std::num::TryFromIntError,
+    },
+    #[error("invalid Interval Mask value - {val:}")]
+    InvalidIntervalMask { val: u32 },
+    #[error(
+        "IntervalMask resolved to {count:} modifiers ({mods:}), but should not have more than 2"
+    )]
+    TooManyModifiers { count: usize, mods: String },
+}
+
+impl IntervalMask {
+    pub fn from_i64(i: i64) -> Result<IntervalMask, IntervalMaskError> {
+        let u = u32::try_from(i)?;
+        Self::from_bits(u).ok_or(IntervalMaskError::InvalidIntervalMask { val: u })
+    }
+
+    pub fn type_modifiers(self) -> Result<String, IntervalMaskError> {
+        let mut mods: Vec<&'static str> = vec![];
+        if self.contains(Self::YEAR) {
+            mods.push("YEAR");
+        }
+        if self.contains(Self::MONTH) {
+            mods.push("MONTH");
+        }
+        if self.contains(Self::DAY) {
+            mods.push("DAY");
+        }
+        if self.contains(Self::HOUR) {
+            mods.push("HOUR");
+        }
+        if self.contains(Self::MINUTE) {
+            mods.push("MINUTE");
+        }
+        if self.contains(Self::SECOND) {
+            mods.push("SECOND");
+        }
+
+        if mods.len() > 2 {
+            return Err(IntervalMaskError::TooManyModifiers {
+                count: mods.len(),
+                mods: mods.join(", "),
+            });
+        }
+
+        if mods.len() == 2 {
+            return Ok(mods.join(" TO "));
+        }
+
+        Ok(mods[0].into())
     }
 }

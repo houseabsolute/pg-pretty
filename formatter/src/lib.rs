@@ -1,4 +1,7 @@
-use pg_pretty_parser::{ast::*, flags::FrameOptions};
+use pg_pretty_parser::{
+    ast::*,
+    flags::{FrameOptions, IntervalMask, IntervalMaskError},
+};
 use scopeguard::guard;
 use std::collections::HashMap;
 use strum_macros::AsRefStr;
@@ -46,20 +49,34 @@ pub enum FormatterError {
     OnConflictUpdateWithoutTargets,
     #[error("an element in a list of targets for an UPDATE had no name")]
     UpdateTargetWithoutName,
+    #[error("a CREATE TABLE statement contained a 0-length vec of columns")]
+    CreateStmtWithZeroLengthColumnsVec,
+    #[error("a partition spec had an element without a name or expression")]
+    PartitionElemWithoutNameOrExpression,
+    #[error("{source:}")]
+    IntervalMaskError {
+        #[from]
+        source: IntervalMaskError,
+    },
 }
 
 #[derive(AsRefStr, Debug, PartialEq)]
 enum ContextType {
     AExpr(u8),
+    ExclusionOperator,
     GroupingSet,
+    Having,
     InsertStmt,
+    JoinQualifiers,
     OnConflictUpdate,
-    OrderByUsingClause,
+    OrderByUsing,
     RangeTableSample,
     Returning,
     SelectStmt,
     SubLink,
+    UniqueConstraintKeys,
     UpdateStmt,
+    Where,
 }
 
 impl ContextType {
@@ -96,6 +113,8 @@ impl Formatter {
     pub fn new() -> Self {
         let mut type_renaming: HashMap<String, String> = HashMap::new();
         type_renaming.insert("int4".to_string(), "int".to_string());
+        type_renaming.insert("int8".to_string(), "bigint".to_string());
+        type_renaming.insert("bpchar".to_string(), "char".to_string());
 
         Self {
             bool_expr_depth: 0,
@@ -109,6 +128,7 @@ impl Formatter {
 
     fn new_subformatter(&self) -> Self {
         let mut sub = Self::new();
+
         sub.indents = vec![self.current_indent() + self.indent_width];
         sub
     }
@@ -128,20 +148,29 @@ impl Formatter {
             Node::SelectStmt(s) => self.format_select_stmt(s),
             Node::UpdateStmt(u) => self.format_update_stmt(u),
 
+            // CREATE statements
+            Node::CreateStmt(c) => self.format_create_table_stmt(c),
+
             // expressions
             Node::AConst(a) => Ok(self.format_a_const(a)),
             Node::AExpr(a) => self.format_a_expr(a),
             Node::AIndirection(a) => self.format_a_indirection(a),
             Node::BoolExpr(b) => self.format_bool_expr(b),
             Node::ColumnRef(c) => Ok(self.format_column_ref(c)),
+            Node::Constraint(c) => self.format_constraint(c),
             Node::CurrentOfExpr(c) => Ok(self.format_current_of_expr(c)),
+            Node::DefElem(d) => self.format_def_elem(d),
             Node::FuncCall(f) => self.format_func_call(f),
             Node::GroupingSet(g) => self.format_grouping_set(g),
             Node::IndexElem(i) => self.format_index_elem(i),
+            Node::Integer(i) => Ok(i.ival.to_string()),
+            Node::PartitionElem(p) => self.format_partition_elem(p),
+            Node::PartitionRangeDatum(p) => self.format_partition_range_datum(p),
             Node::RangeVar(r) => Ok(self.format_range_var(r)),
             Node::ResTarget(r) => self.format_res_target(r),
             Node::RowExpr(r) => self.format_row_expr(r),
-            Node::SetToDefault(_) => Ok("DEFAULT".to_string()),
+            Node::SetToDefault(_) => Ok("DEFAULT".into()),
+            Node::SQLValueFunction(f) => Ok(self.format_sql_value_function(f)),
             Node::StringStruct(s) => Ok(self.format_string(&s.str)),
             Node::SubLink(s) => self.format_sub_link(s),
             Node::TypeCast(t) => self.format_type_cast(t),
@@ -232,7 +261,7 @@ impl Formatter {
     fn format_select_stmt(&mut self, s: &SelectStmt) -> R {
         let mut formatter = new_context!(self, ContextType::SelectStmt);
 
-        if let Some(mut op) = formatter.match_op(&s.op) {
+        if let Some(mut op) = formatter.select_op(&s.op) {
             // XXX - this is so gross. I think the unstable box matching
             // syntax would make this much less gross.
             let left = match &s.larg {
@@ -317,6 +346,197 @@ impl Formatter {
     }
 
     //#[trace]
+    fn format_create_table_stmt(&mut self, c: &CreateStmt) -> R {
+        let RangeVarWrapper::RangeVar(rel) = &c.relation;
+
+        let mut create = self.indent_str("CREATE");
+        if let Some(per) = rel.persistence() {
+            create.push(' ');
+            create.push_str(per);
+        }
+        create.push_str(" TABLE ");
+
+        if c.if_not_exists {
+            create.push_str("IF NOT EXISTS ");
+        }
+
+        create.push_str(&self.format_range_var(rel));
+
+        if let Some(i) = &c.inh_relations {
+            create.push_str("\nPARTITION OF ");
+            // This is a Vec<Node> but if we look at gram.y we see it's always
+            // one element.
+            create.push_str(&self.format_node(&i[0])?);
+        }
+
+        if let Some(elts) = &c.table_elts {
+            create.push_str(&self.format_create_table_elements(elts)?);
+        }
+
+        create.push('\n');
+
+        if let Some(opts) = &c.options {
+            create.push_str(&format!(
+                "WITH ( {} )\n",
+                self.formatted_list(opts)?.join(", ")
+            ));
+        }
+
+        if let Some(t) = &c.tablespacename {
+            create.push_str("TABLESPACE ");
+            create.push_str(&t);
+            create.push('\n');
+        }
+
+        if let Some(PartitionBoundSpecWrapper::PartitionBoundSpec(p)) = &c.partbound {
+            if p.strategy == 'r' {
+                create.push_str(&format!(
+                    "FOR VALUES FROM {} TO {}\n",
+                    self.parenthesized_list(p.lowerdatums.as_ref().unwrap())?,
+                    self.parenthesized_list(p.upperdatums.as_ref().unwrap())?,
+                ));
+            } else {
+                // The postgres gram.y seems to indicate that these values
+                // could include boolean literals, but a test case with `FOR
+                // VALUES IN (true, false)` fails to parse, so apparently it's
+                // just strings, numbers, and NULL?
+                create.push_str(&format!(
+                    "FOR VALUES IN {}\n",
+                    self.parenthesized_list(p.listdatums.as_ref().unwrap())?,
+                ));
+            }
+        }
+
+        if let Some(PartitionSpecWrapper::PartitionSpec(p)) = &c.partspec {
+            create.push_str(&format!(
+                "PARTITION BY {} {}\n",
+                p.strategy.to_uppercase(),
+                self.parenthesized_list(&p.part_params)?,
+            ));
+        }
+
+        Ok(create)
+    }
+
+    fn format_create_table_elements(&mut self, elts: &[CreateStmtElement]) -> R {
+        let mut create = String::new();
+
+        let mut cols: Vec<&ColumnDef> = vec![];
+        let mut constraints: Vec<&Constraint> = vec![];
+        let mut likes: Vec<&TableLikeClause> = vec![];
+
+        for e in elts {
+            match e {
+                CreateStmtElement::ColumnDef(e) => cols.push(e),
+                CreateStmtElement::Constraint(e) => constraints.push(e),
+                CreateStmtElement::TableLikeClause(e) => likes.push(e),
+            }
+        }
+
+        create.push_str(" (\n");
+
+        self.push_indent_one_level();
+
+        create.push_str(&self.format_column_defs_for_create(&cols)?);
+        // Is there a less gross way to do this?
+        if !cols.is_empty() && !constraints.is_empty() {
+            create.pop();
+            create.push_str(",\n");
+        }
+        create.push_str(&self.format_constraints_for_create(&constraints)?);
+        if (!cols.is_empty() || !constraints.is_empty()) && !likes.is_empty() {
+            create.pop();
+            create.push_str(",\n");
+        }
+
+        self.pop_indent();
+
+        create.push_str(&self.indent_str(")"));
+
+        Ok(create)
+    }
+
+    fn format_column_defs_for_create(&mut self, cols: &[&ColumnDef]) -> R {
+        if cols.is_empty() {
+            return Ok(String::new());
+        }
+
+        let mut create = String::new();
+
+        // If this ends up being 0 that will not work well.
+        let max_name_width = cols
+            .iter()
+            .map(|c| c.colname.len())
+            .max()
+            .ok_or(FormatterError::CreateStmtWithZeroLengthColumnsVec)?;
+
+        for (i, cd) in cols.iter().enumerate() {
+            let f = self.format_column_def(cd, max_name_width, true)?;
+            create.push_str(&self.indent_str(&f));
+            if let Some(attrs) = self.column_attributes(&cd)? {
+                // Columns in partition tables may not have a type.
+                if cd.type_name.is_some() {
+                    create.push(' ');
+                }
+                create.push_str(&attrs.join(" "));
+            }
+            if i < cols.len() - 1 {
+                create.push(',');
+            }
+            create.push('\n');
+        }
+
+        Ok(create)
+    }
+
+    fn column_attributes(&mut self, c: &ColumnDef) -> Result<Option<Vec<String>>, FormatterError> {
+        let mut attrs: Vec<String> = vec![];
+
+        if let Some(cons) = &c.constraints {
+            attrs.append(
+                &mut cons
+                    .iter()
+                    .map(|con| self.format_node(con))
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+        }
+
+        if let Some(d) = &c.cooked_default {
+            attrs.push(format!("DEFAULT {}", &self.format_node(d)?));
+        }
+
+        // There are a number of attributes of the ColumnDef that will never
+        // be populated, like is_not_null, identity, and others. I'm guessing
+        // that at some point in the past, these were set when parsing, but
+        // modern Postgres now treats these all as constraints.
+
+        if attrs.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(attrs))
+    }
+
+    fn format_constraints_for_create(&mut self, cons: &[&Constraint]) -> R {
+        if cons.is_empty() {
+            return Ok(String::new());
+        }
+
+        let formatted = cons
+            .iter()
+            .map(|c| self.format_constraint(c))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut create = formatted
+            .iter()
+            .map(|f| self.indent_str(f))
+            .collect::<Vec<String>>()
+            .join(",\n");
+        create.push('\n');
+
+        Ok(create)
+    }
+
+    //#[trace]
     fn format_select_clause(&mut self, tl: &[Node], d: Option<&Vec<Option<Node>>>) -> R {
         let mut prefix = "SELECT ".to_string();
 
@@ -363,21 +583,23 @@ impl Formatter {
         match self.contexts.last() {
             Some(c) => match c {
                 ContextType::AExpr(_)
-                | ContextType::OrderByUsingClause
+                | ContextType::ExclusionOperator
+                | ContextType::OrderByUsing
                 | ContextType::RangeTableSample
-                | ContextType::SubLink => s.to_string(),
+                | ContextType::SubLink
+                | ContextType::UniqueConstraintKeys => s.to_string(),
                 _ => self.quote_string(&s),
             },
             None => self.quote_string(&s),
         }
     }
 
-    fn match_op(&self, op: &SetOperation) -> Option<String> {
+    fn select_op(&self, op: &SetOperation) -> Option<String> {
         match op {
-            SetOperation::SetopUnion => Some("UNION".to_string()),
-            SetOperation::SetopIntersect => Some("INTERSECT".to_string()),
             SetOperation::SetopExcept => Some("EXCEPT".to_string()),
+            SetOperation::SetopIntersect => Some("INTERSECT".to_string()),
             SetOperation::SetopNone => None,
+            SetOperation::SetopUnion => Some("UNION".to_string()),
         }
     }
 
@@ -490,11 +712,13 @@ impl Formatter {
 
     //#[trace]
     fn format_where_clause(&mut self, w: &Node) -> R {
-        let mut wh = self.indent_str("WHERE ");
+        let mut formatter = new_context!(self, ContextType::Where);
 
-        self.push_indent_from_str(&wh);
-        wh.push_str(&self.format_node(w)?);
-        self.pop_indent();
+        let mut wh = formatter.indent_str("WHERE ");
+
+        formatter.push_indent_from_str(&wh);
+        wh.push_str(&formatter.format_node(w)?);
+        formatter.pop_indent();
 
         wh.push('\n');
 
@@ -521,12 +745,29 @@ impl Formatter {
 
     //#[trace]
     fn format_a_const(&mut self, a: &AConst) -> String {
-        match &a.val {
+        self.format_value(&a.val)
+    }
+
+    //#[trace]
+    fn format_value(&mut self, v: &Value) -> String {
+        match &v {
             Value::StringStruct(s) => self.quote_string(&s.str),
             Value::BitString(s) => self.quote_string(&s.str),
             Value::Integer(i) => i.ival.to_string(),
             Value::Float(f) => f.str.clone(),
             Value::Null(_) => "NULL".to_string(),
+        }
+    }
+
+    //#[trace]
+    fn format_value_or_type_name(&mut self, v: &ValueOrTypeName) -> R {
+        match &v {
+            ValueOrTypeName::StringStruct(s) => Ok(self.quote_string(&s.str)),
+            ValueOrTypeName::BitString(s) => Ok(self.quote_string(&s.str)),
+            ValueOrTypeName::Integer(i) => Ok(i.ival.to_string()),
+            ValueOrTypeName::Float(f) => Ok(f.str.clone()),
+            ValueOrTypeName::Null(_) => Ok("NULL".into()),
+            ValueOrTypeName::TypeName(t) => self.format_type_name(t),
         }
     }
 
@@ -685,9 +926,13 @@ impl Formatter {
             }
         };
 
-        // The first level of bool expr will be immediately after a "WHERE" or
-        // an "ON", and so does not need additional indentation.
-        if self.bool_expr_depth == 1 {
+        // The first level of bool expr immediately after a "HAVING", "ON", or
+        // "WHERE" does not need additional indentation.
+        if self.bool_expr_depth == 1
+            && (self.last_context_is(ContextType::Having)
+                || self.last_context_is(ContextType::JoinQualifiers)
+                || self.last_context_is(ContextType::Where))
+        {
             expr.push_str(&args.remove(0));
         } else {
             expr.push_str(&self.indent_str(&args.remove(0)));
@@ -731,6 +976,19 @@ impl Formatter {
     }
 
     //#[trace]
+    fn format_def_elem(&mut self, d: &DefElem) -> R {
+        let elem = d.defname.to_string();
+        match elem.as_ref() {
+            "fillfactor" => Ok(format!(
+                "{} = {}",
+                elem,
+                self.format_value_or_type_name(&d.arg)?
+            )),
+            _ => panic!("unhandled defname"),
+        }
+    }
+
+    //#[trace]
     fn format_func_call(&mut self, f: &FuncCall) -> R {
         // There are a number of special case "functions" like "thing AT TIME
         // ZONE ..." and "thing LIKE foo ESCAPE bar" that need to be handled
@@ -741,13 +999,21 @@ impl Formatter {
         let mut func = f
             .funcname
             .iter()
-            .map(|n| match n {
+            .filter_map(|n| match n {
                 // We don't want to quote a string here.
-                Node::StringStruct(s) => Ok(s.str.clone()),
-                _ => self.format_node(&n),
+                Node::StringStruct(s) => {
+                    // The parser will stick this in front of lots of func
+                    // calls so you get "pg_catalog.date_part", but no one
+                    // wants to see that (I think).
+                    if s.str == "pg_catalog" {
+                        return None;
+                    }
+                    Some(Ok(s.str.clone()))
+                }
+                _ => Some(self.format_node(&n)),
             })
             .collect::<Result<Vec<_>, _>>()?
-            .join(" ");
+            .join(".");
         func.push('(');
 
         let mut arg_is_simple = true;
@@ -1055,6 +1321,31 @@ impl Formatter {
     }
 
     //#[trace]
+    fn format_sql_value_function(&mut self, v: &SQLValueFunction) -> String {
+        match v.op {
+            SQLValueFunctionOp::SvfopCurrentCatalog => "current_catalog".into(),
+            SQLValueFunctionOp::SvfopCurrentDate => "current_date".into(),
+            SQLValueFunctionOp::SvfopCurrentRole => "current_role".into(),
+            SQLValueFunctionOp::SvfopCurrentSchema => "current_schema".into(),
+            SQLValueFunctionOp::SvfopCurrentTime => "current_time".into(),
+            SQLValueFunctionOp::SvfopCurrentTimeN => format!("current_time({})", v.typmod.unwrap()),
+            SQLValueFunctionOp::SvfopCurrentTimestamp => "current_timestamp".into(),
+            SQLValueFunctionOp::SvfopCurrentTimestampN => {
+                format!("current_timestamp({})", v.typmod.unwrap())
+            }
+            SQLValueFunctionOp::SvfopCurrentUser => "current_user".into(),
+            SQLValueFunctionOp::SvfopLocaltime => "localtime".into(),
+            SQLValueFunctionOp::SvfopLocaltimeN => format!("localtime({})", v.typmod.unwrap()),
+            SQLValueFunctionOp::SvfopLocaltimestamp => "localtimestamp".into(),
+            SQLValueFunctionOp::SvfopLocaltimestampN => {
+                format!("localtimestamp({})", v.typmod.unwrap())
+            }
+            SQLValueFunctionOp::SvfopSessionUser => "session_user".into(),
+            SQLValueFunctionOp::SvfopUser => "user".into(),
+        }
+    }
+
+    //#[trace]
     fn format_grouping_set(&mut self, gs: &GroupingSet) -> R {
         let is_nested = self.is_in_context(ContextType::GroupingSet);
 
@@ -1175,15 +1466,9 @@ impl Formatter {
         e.push_str(&self.format_from_element(&j.rarg, is_first)?);
 
         if let Some(q) = &j.quals {
-            // For now, we'll just always put a newline before the "ON ..."
-            // clause. This simplifies the formatting and makes it consistent
-            // with how we format WHERE clauses.
-            e.push('\n');
-            self.push_indent_one_level();
-            e.push_str(&self.indent_str("ON "));
-            e.push_str(&self.format_node(q)?);
-            self.pop_indent();
+            e.push_str(&self.format_join_qualifiers(&*q)?);
         }
+
         if let Some(u) = &j.using_clause {
             let using = format!("USING {}", self.format_using_clause(u));
             // + 1 for space before "USING"
@@ -1228,6 +1513,22 @@ impl Formatter {
     }
 
     //#[trace]
+    fn format_join_qualifiers(&mut self, q: &Node) -> R {
+        let mut formatter = new_context!(self, ContextType::JoinQualifiers);
+
+        let mut quals = "\n".to_string();
+        // For now, we'll just always put a newline before the "ON ..."
+        // clause. This simplifies the formatting and makes it consistent
+        // with how we format WHERE clauses.
+        formatter.push_indent_one_level();
+        quals.push_str(&formatter.indent_str("ON "));
+        quals.push_str(&formatter.format_node(q)?);
+        formatter.pop_indent();
+
+        Ok(quals)
+    }
+
+    //#[trace]
     fn format_using_clause(&self, u: &[StringStructWrapper]) -> String {
         let mut using = "(".to_string();
         if u.len() > 1 {
@@ -1245,6 +1546,27 @@ impl Formatter {
         }
         using.push(')');
         using
+    }
+
+    //#[trace]
+    fn format_partition_elem(&mut self, p: &PartitionElem) -> R {
+        if let Some(n) = &p.name {
+            Ok(n.clone())
+        } else if let Some(e) = &p.expr {
+            self.format_node(&*e)
+        } else {
+            Err(FormatterError::PartitionElemWithoutNameOrExpression)
+        }
+    }
+
+    fn format_partition_range_datum(&mut self, p: &PartitionRangeDatum) -> R {
+        match &p.kind {
+            PartitionRangeDatumKind::PartitionRangeDatumMinvalue => Ok("MINVALUE".into()),
+            PartitionRangeDatumKind::PartitionRangeDatumMaxvalue => Ok("MAXVALUE".into()),
+            PartitionRangeDatumKind::PartitionRangeDatumValue => {
+                self.format_node(&*p.value.as_ref().unwrap())
+            }
+        }
     }
 
     //#[trace]
@@ -1282,11 +1604,13 @@ impl Formatter {
 
     //#[trace]
     fn format_having_clause(&mut self, h: &Node) -> R {
-        let mut having = self.indent_str("HAVING ");
+        let mut formatter = new_context!(self, ContextType::Having);
 
-        self.push_indent_from_str(&having);
-        having.push_str(&self.format_node(h)?);
-        self.pop_indent();
+        let mut having = formatter.indent_str("HAVING ");
+
+        formatter.push_indent_from_str(&having);
+        having.push_str(&formatter.format_node(h)?);
+        formatter.pop_indent();
 
         having.push('\n');
 
@@ -1389,7 +1713,7 @@ impl Formatter {
                                 // Using a scopeguard here doesn't work because it
                                 // takes ownership of formatter and then it's not
                                 // available next time through the loop.
-                                f.contexts.push(ContextType::OrderByUsingClause);
+                                f.contexts.push(ContextType::OrderByUsing);
                                 let res = f.formatted_list(u);
                                 f.contexts.pop();
                                 el.push_str(&res?.join(" "));
@@ -1415,7 +1739,8 @@ impl Formatter {
     fn format_type_cast(&mut self, tc: &TypeCast) -> R {
         let mut type_cast = self.format_node(&*tc.arg)?;
         type_cast.push_str("::");
-        type_cast.push_str(&self.format_type_name(&tc.type_name));
+        let TypeNameWrapper::TypeName(tn) = &tc.type_name;
+        type_cast.push_str(&self.format_type_name(&tn)?);
 
         // This is some oddity of the parser. It turns TRUE and FALSE literals
         // into this cast expression.
@@ -1429,10 +1754,14 @@ impl Formatter {
     }
 
     //#[trace]
-    fn format_type_name(&mut self, tn: &TypeNameWrapper) -> String {
-        match tn {
-            TypeNameWrapper::TypeName(t) => t
-                .names
+    fn format_type_name(&mut self, tn: &TypeName) -> R {
+        let mut name = String::new();
+        if tn.setof {
+            name.push_str("SET OF ");
+        }
+
+        let n = match &tn.names {
+            Some(names) => names
                 .iter()
                 // Is this clone necessary? It feels like there should be a
                 // way to work with the original reference until the join.
@@ -1442,7 +1771,50 @@ impl Formatter {
                 .filter(|n| n != "pg_catalog")
                 .collect::<Vec<String>>()
                 .join("."),
+            None => panic!("not sure how to handle a nameless type"),
+        };
+
+        name.push_str(&n);
+
+        // XXX - I have no idea when this is set to a value that _isn't_ -1.
+        if let Some(m) = &tn.typemod {
+            if *m != -1 {
+                name.push_str(&format!("({})", m));
+            }
         }
+        if let Some(m) = &tn.typmods {
+            if m.len() == 1 {
+                if n.eq("interval") {
+                    // If the type is INTERVAL then we _should_ have exactly
+                    // one node, which is an integer constant. That constant
+                    // is actually an INTERVAL_MASK flag representing an
+                    // interval precision.
+                    let mask = match &m[0] {
+                        Node::AConst(AConst {
+                            val: Value::Integer(Integer { ival: i }),
+                            location: _,
+                        }) => IntervalMask::from_i64(*i)?,
+                        _ => panic!("argh"),
+                    };
+                    name.push(' ');
+                    name.push_str(&mask.type_modifiers()?);
+                } else {
+                    name.push_str(&format!("({})", &self.format_node(&m[0])?));
+                }
+            }
+        }
+
+        if let Some(ab) = &tn.array_bounds {
+            for e in ab {
+                match e {
+                    // If the element is -1 then this is an unbounded array.
+                    Node::Integer(Integer { ival: -1 }) => name.push_str("[]"),
+                    _ => name.push_str(&format!("[{}]", self.format_node(e)?)),
+                }
+            }
+        }
+
+        Ok(name)
     }
 
     //#[trace]
@@ -1556,26 +1928,177 @@ impl Formatter {
     //#[trace]
     fn format_column_def_list(&mut self, defs: &[ColumnDefWrapper], last_line_len: usize) -> R {
         let maker = |f: &mut Self| {
-            Ok(defs
-                .iter()
-                .map(|d| {
-                    let ColumnDefWrapper::ColumnDef(d) = d;
-                    f.format_column_def(d)
-                })
-                .collect::<Vec<_>>())
+            defs.iter()
+                .map(|ColumnDefWrapper::ColumnDef(d)| f.format_column_def(d, 0, false))
+                .collect::<Result<Vec<_>, _>>()
         };
 
         self.one_line_or_many("", false, true, true, last_line_len, maker)
     }
 
     //#[trace]
-    fn format_column_def(&mut self, def: &ColumnDef) -> String {
-        // XXX - is there any way to steal this string instead? That'd require
-        // passing the ColumnDef as a non-ref, I believe.
-        let mut d = def.colname.clone();
-        d.push(' ');
-        d.push_str(&self.format_type_name(&def.type_name));
-        d
+    fn format_column_def(&mut self, def: &ColumnDef, name_padding: usize, in_table: bool) -> R {
+        let mut d = if name_padding > 1 {
+            self.pad_str(&def.colname, name_padding)
+        } else {
+            def.colname.clone()
+        };
+
+        if in_table {
+            d.push_str("  ");
+        } else {
+            d.push(' ');
+        }
+
+        if let Some(TypeNameWrapper::TypeName(tn)) = &def.type_name {
+            d.push_str(&self.format_type_name(&tn)?);
+        }
+
+        Ok(d)
+    }
+
+    fn format_constraint(&mut self, c: &Constraint) -> R {
+        match &c.contype {
+            ConstrType::ConstrNull => Ok("NULL".into()),
+            ConstrType::ConstrNotnull => Ok("NOT NULL".into()),
+            ConstrType::ConstrDefault => self.format_default_constraint(c),
+            ConstrType::ConstrIdentity => Ok(self.format_identity_constraint(c)),
+            ConstrType::ConstrCheck => self.format_check_constraint(c),
+            ConstrType::ConstrPrimary => self.format_unique_constraint(c, true),
+            ConstrType::ConstrUnique => self.format_unique_constraint(c, false),
+            ConstrType::ConstrExclusion => self.format_exclusion_constraint(c),
+            ConstrType::ConstrForeign => Ok("FOREIGN".into()),
+            // attributes for previous constraint node
+            ConstrType::ConstrAttrDeferrable => Ok(String::new()),
+            ConstrType::ConstrAttrNotDeferrable => Ok(String::new()),
+            ConstrType::ConstrAttrDeferred => Ok(String::new()),
+            ConstrType::ConstrAttrImmediate => Ok(String::new()),
+        }
+    }
+
+    fn format_default_constraint(&mut self, c: &Constraint) -> R {
+        let e = match &c.raw_expr {
+            Some(e) => e,
+            None => panic!("DEFAULT constraint without an expression"),
+        };
+        Ok(format!("DEFAULT {}", self.format_node(&*e)?))
+    }
+
+    fn format_identity_constraint(&mut self, c: &Constraint) -> String {
+        let g = match c.generated_when() {
+            Some(g) => g,
+            None => panic!("IDENTITY constraint without generated_when"),
+        };
+        format!("GENERATED {} AS IDENTITY", g)
+    }
+
+    fn format_check_constraint(&mut self, c: &Constraint) -> R {
+        let e = match &c.raw_expr {
+            Some(e) => e,
+            None => panic!("CHECK constraint without an expression"),
+        };
+
+        let mut check = "CHECK (".to_string();
+
+        // This
+        let expr = self.format_node(&*e)?;
+        if expr.contains('\n') {
+            check.push('\n');
+            self.push_indent_one_level();
+            check.push_str(&self.format_node(&*e)?);
+            self.pop_indent();
+            check.push('\n');
+            check.push_str(&self.indent_str(")"));
+        } else {
+            check.push(' ');
+            check.push_str(expr.trim());
+            check.push_str(" )");
+        }
+
+        match &c.conname {
+            Some(n) => Ok(format!("CONSTRAINT {} {}", n, check)),
+            None => Ok(check),
+        }
+    }
+
+    fn format_unique_constraint(&mut self, c: &Constraint, is_pk: bool) -> R {
+        let typ = if is_pk { "PRIMARY KEY" } else { "UNIQUE" };
+        let mut cons = match &c.conname {
+            Some(n) => format!("CONSTRAINT {} {}", n, typ),
+            None => typ.into(),
+        };
+
+        if let Some(k) = &c.keys {
+            cons.push_str(&self.format_keys(k)?);
+        }
+
+        if let Some(opts) = &c.options {
+            cons.push_str(&format!(
+                " WITH ( {} )",
+                self.formatted_list(opts)?.join(", ")
+            ));
+        }
+
+        Ok(cons)
+    }
+
+    //#[trace]
+    fn format_exclusion_constraint(&mut self, c: &Constraint) -> R {
+        let am = match &c.access_method {
+            Some(a) => a,
+            None => panic!("EXCLUDE constraint without an access_method"),
+        };
+
+        let ex = match &c.exclusions {
+            Some(e) => e,
+            None => panic!("EXCLUDE constraint without exclusions"),
+        };
+
+        Ok(format!(
+            "EXCLUDE USING {} ( {} )",
+            am,
+            ex.iter()
+                .map(|e| self.format_exclusion(e))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", "),
+        ))
+    }
+
+    //#[trace]
+    fn format_exclusion(&mut self, e: &Exclusion) -> R {
+        let mut excl = self.format_node(&e.0)?;
+        excl.push_str(" WITH ");
+
+        let mut formatter = new_context!(self, ContextType::ExclusionOperator);
+        let oper =
+            e.1.iter()
+                .map(|n| formatter.format_node(n))
+                .collect::<Result<Vec<_>, _>>()?
+                // I'm not sure if this is right. What produces multiple
+                // elements for the operator?
+                .join(" ");
+        excl.push_str(&oper);
+
+        Ok(excl)
+    }
+
+    //#[trace]
+    fn format_keys(&mut self, k: &[Node]) -> R {
+        let mut formatter = new_context!(self, ContextType::UniqueConstraintKeys);
+
+        let mut keys = " (".to_string();
+
+        let cols = formatter.formatted_list(k)?;
+        if cols.len() > 1 {
+            keys.push(' ');
+        }
+        keys.push_str(&cols.join(", "));
+        if cols.len() > 1 {
+            keys.push(' ');
+        }
+        keys.push(')');
+
+        Ok(keys)
     }
 
     //#[trace]
@@ -1960,6 +2483,14 @@ impl Formatter {
         Ok(self.formatted_list(v)?.join(joiner))
     }
 
+    fn parenthesized_list(&mut self, v: &[Node]) -> R {
+        let list = self.formatted_list(v)?.join(", ");
+        if list.contains(&[',', '(', ' '][..]) {
+            return Ok(format!("( {} )", list));
+        }
+        Ok(format!("({})", list))
+    }
+
     fn formatted_list(&mut self, v: &[Node]) -> Result<Vec<String>, FormatterError> {
         v.iter()
             .map(|n| self.format_node(n))
@@ -1998,6 +2529,10 @@ impl Formatter {
 
     fn quote_string(&self, s: &str) -> String {
         format!("'{}'", s.replace("'", "''"))
+    }
+
+    fn pad_str(&self, s: &str, width: usize) -> String {
+        format!("{:width$}", s, width = width)
     }
 
     fn indent_str(&self, s: &str) -> String {

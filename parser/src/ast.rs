@@ -48,7 +48,11 @@ pub enum Value {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
-pub enum StringOrTypeName {
+pub enum ValueOrTypeName {
+    BitString(BitString),
+    Integer(Integer),
+    Float(Float),
+    Null(Null),
     #[serde(rename = "String")]
     StringStruct(StringStruct),
     TypeName(TypeName),
@@ -57,8 +61,8 @@ pub enum StringOrTypeName {
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum DefElemArgs {
-    One(StringOrTypeName),
-    Many(Vec<StringOrTypeName>),
+    One(ValueOrTypeName),
+    Many(Vec<ValueOrTypeName>),
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -70,6 +74,16 @@ pub enum IndirectionListElement {
     #[serde(rename = "String")]
     StringStruct(StringStruct),
 }
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub enum CreateStmtElement {
+    ColumnDef(ColumnDef),
+    Constraint(Constraint),
+    TableLikeClause(TableLikeClause),
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct Exclusion(pub Node, pub Vec<Node>);
 
 #[derive(Debug, Deserialize, PartialEq)]
 // The first node should always be a FuncCall and the optional list should
@@ -1057,7 +1071,7 @@ pub struct ColumnDef {
     pub colname: String, // char*
     // type of column
     #[serde(rename = "typeName")]
-    pub type_name: TypeNameWrapper, // TypeName*
+    pub type_name: Option<TypeNameWrapper>, // TypeName*
     // number of times column is inherited
     pub inhcount: Option<i64>, // int
     // column has local (non-inherited) def'n
@@ -1201,7 +1215,7 @@ pub struct Const {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct Constraint {
     // see above
-    pub contype: Option<ConstrType>, // ConstrType
+    pub contype: ConstrType, // ConstrType
     // Constraint name, or NULL if unnamed
     pub conname: Option<String>, // char*
     // DEFERRABLE?
@@ -1223,7 +1237,7 @@ pub struct Constraint {
     // String nodes naming referenced column(s)
     pub keys: Option<List>, // List*
     // list of (IndexElem, operator name) pairs
-    pub exclusions: Option<List>, // List*
+    pub exclusions: Option<Vec<Exclusion>>, // List*
     // options from WITH clause
     pub options: Option<List>, // List*
     // existing index to use; otherwise NULL
@@ -1665,10 +1679,10 @@ pub struct CreateStatsStmt {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct CreateStmt {
     // relation to create
-    pub relation: Option<RangeVarWrapper>, // RangeVar*
+    pub relation: RangeVarWrapper, // RangeVar*
     // column definitions (list of ColumnDef)
     #[serde(rename = "tableElts")]
-    pub table_elts: Option<Vec<ColumnDefWrapper>>, // List*
+    pub table_elts: Option<Vec<CreateStmtElement>>, // List*
     // relations to inherit from (list of
     // inhRelation)
     #[serde(rename = "inhRelations")]
@@ -1869,9 +1883,9 @@ pub struct DeclareCursorStmt {
 pub struct DefElem {
     // NULL if unqualified name
     pub defnamespace: Option<String>, // char*
-    pub defname: Option<String>,      // char*
+    pub defname: String,              // char*
     // a (Value *) or a (TypeName *)
-    pub arg: DefElemArgs, // Node*
+    pub arg: ValueOrTypeName, // Node*
     // unspecified action, or SET/ADD/DROP
     pub defaction: Option<DefElemAction>, // DefElemAction
     // token location, or -1 if unknown
@@ -2865,7 +2879,7 @@ pub struct ParamRef {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct PartitionBoundSpec {
     // see PARTITION_STRATEGY codes above
-    pub strategy: Option<char>, // char
+    pub strategy: char, // char
     // List of Consts (or A_Consts in raw tree)
     pub listdatums: Option<List>, // List*
     // List of PartitionRangeDatums
@@ -2921,10 +2935,10 @@ pub struct PartitionRangeDatum {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct PartitionSpec {
     // partitioning strategy ('list' or 'range')
-    pub strategy: Option<String>, // char*
+    pub strategy: String, // char*
     // List of PartitionElems
     #[serde(rename = "partParams")]
-    pub part_params: Option<List>, // List*
+    pub part_params: List, // List*
     // token location, or -1 if unknown
     pub location: Option<i64>, // int
 }
@@ -3645,8 +3659,8 @@ pub struct RuleStmt {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct SQLValueFunction {
     // which function this is
-    pub op: Option<SQLValueFunctionOp>, // SQLValueFunctionOp
-    pub typmod: Option<i32>,            // int32
+    pub op: SQLValueFunctionOp, // SQLValueFunctionOp
+    pub typmod: Option<i32>,    // int32
     // token location, or -1 if unknown
     pub location: Option<i64>, // int
 }
@@ -4240,7 +4254,7 @@ pub struct TypeCast {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct TypeName {
     // qualified name (list of Value strings)
-    pub names: Vec<StringStructWrapper>, // List*
+    pub names: Option<Vec<StringStructWrapper>>, // List*
     // type identified by OID
     #[serde(rename = "typeOid")]
     pub type_oid: Option<Oid>, // Oid
@@ -6071,3 +6085,31 @@ pub enum WithClauseWrapper {
 }
 
 // end generated code >>>
+
+// It would be a bit slicker if RangeVar.persistence could have its own enum
+// type, we could match on the enum. But this would require custom
+// deserialization to transform the incoming strings like "p" or "t" into an
+// enum variant.
+impl RangeVar {
+    pub fn persistence(&self) -> Option<&str> {
+        match self.relpersistence {
+            Some('p') => None,
+            Some('t') => Some("TEMPORARY"),
+            Some('u') => Some("UNLOGGED"),
+            // This is only going to be None, but without an enum Rust thinks
+            // all char values are possible.
+            _ => None,
+        }
+    }
+}
+
+// Same comment re: enum and matching `_`.
+impl Constraint {
+    pub fn generated_when(&self) -> Option<&str> {
+        match self.generated_when {
+            Some('a') => Some("ALWAYS"),
+            Some('d') => Some("BY DEFAULT"),
+            _ => None,
+        }
+    }
+}
