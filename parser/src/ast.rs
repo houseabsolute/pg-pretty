@@ -361,10 +361,12 @@ pub struct AlterEnumStmt {
     #[serde(rename = "newValNeighbor")]
     pub new_val_neighbor: Option<String>, // char*
     // place new enum value after neighbor?
-    #[serde(default, rename = "newValIsAfter")]
+    #[serde(default)]
+    #[serde(rename = "newValIsAfter")]
     pub new_val_is_after: bool, // bool
     // no error if new already exists?
-    #[serde(default, rename = "skipIfNewValExists")]
+    #[serde(default)]
+    #[serde(rename = "skipIfNewValExists")]
     pub skip_if_new_val_exists: bool, // bool
 }
 
@@ -481,7 +483,8 @@ pub struct AlterOpFamilyStmt {
     // name of index AM opfamily is for
     pub amname: Option<String>, // char*
     // ADD or DROP the items?
-    #[serde(default, rename = "isDrop")]
+    #[serde(default)]
+    #[serde(rename = "isDrop")]
     pub is_drop: bool, // bool
     // List of CreateOpClassItem nodes
     pub items: Option<Vec<CreateOpClassItemWrapper>>, // List*
@@ -684,7 +687,8 @@ pub struct AlterTableMoveAllStmt {
 pub struct AlterTableSpaceOptionsStmt {
     pub tablespacename: Option<String>, // char*
     pub options: Option<List>,          // List*
-    #[serde(default, rename = "isReset")]
+    #[serde(default)]
+    #[serde(rename = "isReset")]
     pub is_reset: bool, // bool
 }
 
@@ -748,7 +752,8 @@ pub struct ArrayCoerceExpr {
     // OID of collation, or InvalidOid if none
     pub resultcollid: Option<Oid>, // Oid
     // conversion semantics flag to pass to func
-    #[serde(default, rename = "isExplicit")]
+    #[serde(default)]
+    #[serde(rename = "isExplicit")]
     pub is_explicit: bool, // bool
     // how to display this node
     pub coerceformat: Option<CoercionForm>, // CoercionForm
@@ -1519,7 +1524,8 @@ pub struct CreateOpClassStmt {
     // List of CreateOpClassItem nodes
     pub items: Option<Vec<CreateOpClassItemWrapper>>, // List*
     // Should be marked as default for type?
-    #[serde(default, rename = "isDefault")]
+    #[serde(default)]
+    #[serde(rename = "isDefault")]
     pub is_default: bool, // bool
 }
 
@@ -2467,7 +2473,8 @@ pub struct InlineCodeBlock {
     #[serde(rename = "langOid")]
     pub lang_oid: Option<Oid>, // Oid
     // trusted property of the language
-    #[serde(default, rename = "langIsTrusted")]
+    #[serde(default)]
+    #[serde(rename = "langIsTrusted")]
     pub lang_is_trusted: bool, // bool
 }
 
@@ -2529,7 +2536,8 @@ pub struct IntoClause {
     #[serde(rename = "viewQuery")]
     pub view_query: Option<Box<Node>>, // Node*
     // true for WITH NO DATA
-    #[serde(default, rename = "skipData")]
+    #[serde(default)]
+    #[serde(rename = "skipData")]
     pub skip_data: bool, // bool
 }
 
@@ -2556,7 +2564,8 @@ pub struct JoinExpr {
     // type of join
     pub jointype: JoinType, // JoinType
     // Natural join? Will need to shape table
-    #[serde(default, rename = "isNatural")]
+    #[serde(default)]
+    #[serde(rename = "isNatural")]
     pub is_natural: bool, // bool
     // left subtree
     pub larg: Box<Node>, // Node*
@@ -2975,7 +2984,8 @@ pub struct Query {
     #[serde(rename = "queryId")]
     pub query_id: Option<u32>, // uint32
     // do I set the command result tag?
-    #[serde(default, rename = "canSetTag")]
+    #[serde(default)]
+    #[serde(rename = "canSetTag")]
     pub can_set_tag: bool, // bool
     // non-null if commandType == CMD_UTILITY
     #[serde(rename = "utilityStmt")]
@@ -2985,31 +2995,40 @@ pub struct Query {
     #[serde(rename = "resultRelation")]
     pub result_relation: Option<i64>, // int
     // has aggregates in tlist or havingQual
-    #[serde(default, rename = "hasAggs")]
+    #[serde(default)]
+    #[serde(rename = "hasAggs")]
     pub has_aggs: bool, // bool
     // has window functions in tlist
-    #[serde(default, rename = "hasWindowFuncs")]
+    #[serde(default)]
+    #[serde(rename = "hasWindowFuncs")]
     pub has_window_funcs: bool, // bool
     // has set-returning functions in tlist
-    #[serde(default, rename = "hasTargetSRFs")]
+    #[serde(default)]
+    #[serde(rename = "hasTargetSRFs")]
     pub has_target_sr_fs: bool, // bool
     // has subquery SubLink
-    #[serde(default, rename = "hasSubLinks")]
+    #[serde(default)]
+    #[serde(rename = "hasSubLinks")]
     pub has_sub_links: bool, // bool
     // distinctClause is from DISTINCT ON
-    #[serde(default, rename = "hasDistinctOn")]
+    #[serde(default)]
+    #[serde(rename = "hasDistinctOn")]
     pub has_distinct_on: bool, // bool
     // WITH RECURSIVE was specified
-    #[serde(default, rename = "hasRecursive")]
+    #[serde(default)]
+    #[serde(rename = "hasRecursive")]
     pub has_recursive: bool, // bool
     // has INSERT/UPDATE/DELETE in WITH
-    #[serde(default, rename = "hasModifyingCTE")]
+    #[serde(default)]
+    #[serde(rename = "hasModifyingCTE")]
     pub has_modifying_cte: bool, // bool
     // FOR [KEY] UPDATE/SHARE was specified
-    #[serde(default, rename = "hasForUpdate")]
+    #[serde(default)]
+    #[serde(rename = "hasForUpdate")]
     pub has_for_update: bool, // bool
     // rewriter has applied some RLS policy
-    #[serde(default, rename = "hasRowSecurity")]
+    #[serde(default)]
+    #[serde(rename = "hasRowSecurity")]
     pub has_row_security: bool, // bool
     // WITH list (of CommonTableExpr's)
     #[serde(rename = "cteList")]
@@ -3309,7 +3328,8 @@ pub struct RangeTblEntry {
     #[serde(default)]
     pub inh: bool, // bool
     // present in FROM clause?
-    #[serde(default, rename = "inFromCl")]
+    #[serde(default)]
+    #[serde(rename = "inFromCl")]
     pub in_from_cl: bool, // bool
     // bitmask of required access permissions
     #[serde(rename = "requiredPerms")]
@@ -3433,7 +3453,8 @@ pub struct RefreshMatViewStmt {
     #[serde(default)]
     pub concurrent: bool, // bool
     // true for WITH NO DATA
-    #[serde(default, rename = "skipData")]
+    #[serde(default)]
+    #[serde(rename = "skipData")]
     pub skip_data: bool, // bool
     // relation to insert into
     pub relation: Option<RangeVarWrapper>, // RangeVar*
@@ -3628,7 +3649,8 @@ pub struct RowMarkClause {
     #[serde(rename = "waitPolicy")]
     pub wait_policy: Option<LockWaitPolicy>, // LockWaitPolicy
     // pushed down from higher query level?
-    #[serde(default, rename = "pushedDown")]
+    #[serde(default)]
+    #[serde(rename = "pushedDown")]
     pub pushed_down: bool, // bool
 }
 
@@ -3680,7 +3702,8 @@ pub struct ScalarArrayOpExpr {
     // PG_PROC OID of underlying function
     pub opfuncid: Option<Oid>, // Oid
     // true for ANY, false for ALL
-    #[serde(default, rename = "useOr")]
+    #[serde(default)]
+    #[serde(rename = "useOr")]
     pub use_or: bool, // bool
     // OID of collation that operator should use
     pub inputcollid: Option<Oid>, // Oid
@@ -4042,12 +4065,14 @@ pub struct SubPlan {
     pub first_col_collation: Option<Oid>, // Oid
     // TRUE to store subselect output in a hash
     // table (implies we are doing "IN")
-    #[serde(default, rename = "useHashTable")]
+    #[serde(default)]
+    #[serde(rename = "useHashTable")]
     pub use_hash_table: bool, // bool
     // TRUE if it's okay to return FALSE when the
     // spec result is UNKNOWN; this allows much
     // simpler handling of null values
-    #[serde(default, rename = "unknownEqFalse")]
+    #[serde(default)]
+    #[serde(rename = "unknownEqFalse")]
     pub unknown_eq_false: bool, // bool
     // is the subplan parallel-safe?
     #[serde(default)]
@@ -4209,9 +4234,11 @@ pub struct TransactionStmt {
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct TriggerTransition {
     pub name: Option<String>, // char*
-    #[serde(default, rename = "isNew")]
+    #[serde(default)]
+    #[serde(rename = "isNew")]
     pub is_new: bool, // bool
-    #[serde(default, rename = "isTable")]
+    #[serde(default)]
+    #[serde(rename = "isTable")]
     pub is_table: bool, // bool
 }
 
@@ -4425,7 +4452,8 @@ pub struct WindowClause {
     // ID referenced by window functions
     pub winref: Option<Index>, // Index
     // did we copy orderClause from refname?
-    #[serde(default, rename = "copiedOrder")]
+    #[serde(default)]
+    #[serde(rename = "copiedOrder")]
     pub copied_order: bool, // bool
 }
 
@@ -4554,8 +4582,8 @@ pub struct XmlSerialize {
 }
 
 // A_Expr - infix, prefix, and postfix expressions
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum AExprKind {
     // normal operator
     AExprOp,
@@ -4592,16 +4620,16 @@ pub enum AExprKind {
 }
 
 // Supported operating modes (i.e., useful combinations of these options):
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum AggSplit {
     AggsplitSimple,
     AggsplitInitialSerial,
     AggsplitFinalDeserial,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum AlterSubscriptionType {
     AlterSubscriptionOptions,
     AlterSubscriptionConnection,
@@ -4611,8 +4639,8 @@ pub enum AlterSubscriptionType {
 }
 
 // TS Configuration stmts: DefineStmt, RenameStmt and DropStmt are default
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum AlterTSConfigType {
     AlterTsconfigAddMapping,
     AlterTsconfigAlterMappingForToken,
@@ -4621,8 +4649,8 @@ pub enum AlterTSConfigType {
     AlterTsconfigDropMapping,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum AlterTableType {
     // add column
     AtAddcolumn,
@@ -4763,8 +4791,8 @@ pub enum AlterTableType {
 // Notice the arguments are given as a List.  For NOT, of course the list
 // must always have exactly one element.  For AND and OR, there can be two
 // or more arguments.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum BoolExprType {
     AndExpr,
     OrExpr,
@@ -4776,8 +4804,8 @@ pub enum BoolExprType {
 // is TRUE, FALSE, or UNKNOWN (ie, NULL).  All six meaningful combinations
 // are supported.  Note that a NULL input does *not* cause a NULL result.
 // The appropriate test is performed and returned as a boolean Datum.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum BoolTestType {
     IsTrue,
     IsNotTrue,
@@ -4786,8 +4814,8 @@ pub enum BoolTestType {
 // CmdType -
 // enums for type of operation represented by a Query or PlannedStmt
 // This is needed in both parsenodes.h and plannodes.h, so put it here...
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum CmdType {
     CmdUnknown,
     // select stmt
@@ -4808,8 +4836,8 @@ pub enum CmdType {
 // CoercionContext - distinguishes the allowed set of type casts
 // NB: ordering of the alternatives is significant; later (larger) values
 // allow more casts than earlier ones.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum CoercionContext {
     // coercion in context of expression
     CoercionImplicit,
@@ -4825,8 +4853,8 @@ pub enum CoercionContext {
 // the planner will consider equivalent implicit and explicit casts to be
 // equivalent.  In cases where those actually behave differently, the coercion
 // function's arguments will be different.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum CoercionForm {
     // display as a function call
     CoerceExplicitCall,
@@ -4858,8 +4886,8 @@ pub enum CoercionForm {
 // separate Constraint nodes for simplicity of parsing.  parse_utilcmd.c makes
 // a pass through the constraints list to insert the info into the appropriate
 // Constraint node.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum ConstrType {
     // not standard SQL, but a lot of people
     // expect it
@@ -4886,8 +4914,8 @@ pub enum ConstrType {
 // practice that the grammar allows namespace and action only in statements
 // where they are relevant; C code can just ignore those fields in other
 // statements.)
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum DefElemAction {
     // no action given
     DefelemUnspec,
@@ -4897,8 +4925,8 @@ pub enum DefElemAction {
 }
 
 // Discard Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum DiscardMode {
     DiscardAll,
     DiscardPlans,
@@ -4906,8 +4934,8 @@ pub enum DiscardMode {
     DiscardTemp,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum DropBehavior {
     // drop fails if any dependent objects
     DropRestrict,
@@ -4916,8 +4944,8 @@ pub enum DropBehavior {
 }
 
 // Fetch Statement (also Move)
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum FetchDirection {
     FetchForward,
     FetchBackward,
@@ -4925,8 +4953,8 @@ pub enum FetchDirection {
     FetchRelative,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum FunctionParameterMode {
     FuncParamIn = 105,
     FuncParamOut = 111,
@@ -4935,8 +4963,8 @@ pub enum FunctionParameterMode {
     FuncParamTable = 116,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum GrantObjectType {
     // column
     AclObjectColumn,
@@ -4967,8 +4995,8 @@ pub enum GrantObjectType {
 }
 
 // Grant|Revoke Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum GrantTargetType {
     // grant on specific named object(s)
     AclTargetObject,
@@ -5012,8 +5040,8 @@ pub enum GrantTargetType {
 // SETS( RowExpr(a,b) , CUBE( c, RowExpr(d,e) ) )
 // and parse analysis converts it to:
 // SETS( SIMPLE(1,2), CUBE( SIMPLE(3), SIMPLE(4,5) ) )
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum GroupingSetKind {
     GroupingSetEmpty,
     GroupingSetSimple,
@@ -5023,8 +5051,8 @@ pub enum GroupingSetKind {
 }
 
 // Import Foreign Schema Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum ImportForeignSchemaType {
     // all relations wanted
     FdwImportSchemaAll,
@@ -5040,8 +5068,8 @@ pub enum ImportForeignSchemaType {
 // a matching qualification.  For example, it tells what to do with a tuple
 // that has no match in the other relation.
 // This is needed in both parsenodes.h and plannodes.h, so put it here...
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum JoinType {
     // matching tuple pairs only
     JoinInner,
@@ -5064,8 +5092,8 @@ pub enum JoinType {
 // This enum represents the different strengths of FOR UPDATE/SHARE clauses.
 // The ordering here is important, because the highest numerical value takes
 // precedence when a RTE is specified multiple ways.  See applyLockingClause.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum LockClauseStrength {
     // no such clause - only used in PlanRowMark
     LcsNone,
@@ -5083,8 +5111,8 @@ pub enum LockClauseStrength {
 // clauses (i.e., it represents the NOWAIT and SKIP LOCKED options).
 // The ordering here is important, because the highest numerical value takes
 // precedence when a RTE is specified multiple ways.  See applyLockingClause.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum LockWaitPolicy {
     Lockwaitblock,
     Lockwaitskip,
@@ -5092,8 +5120,8 @@ pub enum LockWaitPolicy {
 }
 
 // MinMaxExpr - a GREATEST or LEAST function
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum MinMaxOp {
     IsGreatest,
     IsLeast,
@@ -5110,8 +5138,8 @@ pub enum MinMaxOp {
 // NOTE: the combination of a rowtype input and argisrow==false does NOT
 // correspond to the SQL notation "row IS [NOT] NULL"; instead, this case
 // represents the SQL notation "row IS [NOT] DISTINCT FROM NULL".
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum NullTestType {
     IsNull,
     IsNotNull,
@@ -5120,8 +5148,8 @@ pub enum NullTestType {
 // When a command can act on several kinds of objects with only one
 // parse structure required, use these constants to designate the
 // object type.  Note that commands typically don't support all the types.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum ObjectType {
     ObjectAccessMethod,
     ObjectAggregate,
@@ -5175,8 +5203,8 @@ pub enum ObjectType {
 }
 
 // What to do at commit time for temporary relations
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum OnCommitAction {
     // No ON COMMIT clause (do nothing)
     OncommitNoop,
@@ -5191,8 +5219,8 @@ pub enum OnCommitAction {
 // OnConflictAction -
 // "ON CONFLICT" clause type of query
 // This is needed in both parsenodes.h and plannodes.h, so put it here...
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum OnConflictAction {
     // No "ON CONFLICT" clause
     OnconflictNone,
@@ -5214,8 +5242,8 @@ pub enum OnConflictAction {
 // Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
 // Portions Copyright (c) 1994, Regents of the University of California
 // src/include/nodes/parsenodes.h
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum OverridingKind {
     OverridingNotSet,
     OverridingUserValue,
@@ -5242,8 +5270,8 @@ pub enum OverridingKind {
 // of the `paramid' field contain the SubLink's subLinkId, and
 // the low-order 16 bits contain the column number.  (This type
 // of Param is also converted to PARAM_EXEC during planning.)
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum ParamKind {
     ParamExtern,
     ParamExec,
@@ -5253,8 +5281,8 @@ pub enum ParamKind {
 
 // PartitionRangeDatum - one of the values in a range partition bound
 // This can be MINVALUE, MAXVALUE or a specific bounded value.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(i8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum PartitionRangeDatumKind {
     PartitionRangeDatumMinvalue = -1,
     PartitionRangeDatumValue = 0,
@@ -5262,8 +5290,8 @@ pub enum PartitionRangeDatumKind {
 }
 
 // Possible sources of a Query
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum QuerySource {
     // original parsetree (explicit query)
     QsrcOriginal,
@@ -5343,8 +5371,8 @@ pub enum QuerySource {
 // rewriter to implement security-barrier views and/or row-level security.
 // Note that the planner turns each boolean expression into an implicitly
 // AND'ed sublist, as is its usual habit with qualification expressions.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum RTEKind {
     // ordinary relation reference
     RteRelation,
@@ -5365,8 +5393,8 @@ pub enum RTEKind {
 }
 
 // Reindex options
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum ReindexObjectType {
     // index
     ReindexObjectIndex,
@@ -5381,8 +5409,8 @@ pub enum ReindexObjectType {
 }
 
 // RoleSpec - a role name or one of a few special values.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum RoleSpecType {
     // role name is stored as a C string
     RolespecCstring,
@@ -5399,8 +5427,8 @@ pub enum RoleSpecType {
 // Create/Alter/Drop User/Group statements.  In the ALTER and DROP cases
 // there's really no need to distinguish what the original spelling was,
 // but for CREATE we mark the type because the defaults vary.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum RoleStmtType {
     RolestmtRole,
     RolestmtUser,
@@ -5417,8 +5445,8 @@ pub enum RoleStmtType {
 // the = and <> cases are translated to simple AND or OR combinations
 // of the pairwise comparisons.  However, we include = and <> in the
 // RowCompareType enum for the convenience of parser logic.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum RowCompareType {
     RowcompareLt,
     RowcompareLe,
@@ -5436,8 +5464,8 @@ pub enum RowCompareType {
 // we would need to store typmod anyway for some of the datetime functions.
 // Note that currently, all variants return non-collating datatypes, so we do
 // not need a collation field; also, all these functions are stable.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum SQLValueFunctionOp {
     SvfopCurrentDate,
     SvfopCurrentTime,
@@ -5465,8 +5493,8 @@ pub enum SQLValueFunctionOp {
 // type for both leaf and internal nodes allows gram.y to stick ORDER BY,
 // LIMIT, etc, clause values into a SELECT statement without worrying
 // whether it is a simple or compound SELECT.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum SetOperation {
     SetopNone,
     SetopUnion,
@@ -5475,8 +5503,8 @@ pub enum SetOperation {
 }
 
 // Sort ordering options for ORDER BY and CREATE INDEX
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum SortByDir {
     SortbyDefault,
     SortbyAsc,
@@ -5485,8 +5513,8 @@ pub enum SortByDir {
     SortbyUsing,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum SortByNulls {
     SortbyNullsDefault,
     SortbyNullsFirst,
@@ -5536,8 +5564,8 @@ pub enum SortByNulls {
 // are referenced by PARAM_MULTIEXPR Params appearing elsewhere in the tlist.
 // The CTE_SUBLINK case never occurs in actual SubLink nodes, but it is used
 // in SubPlans generated for WITH subqueries.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum SubLinkType {
     ExistsSublink,
     AllSublink,
@@ -5551,8 +5579,8 @@ pub enum SubLinkType {
 }
 
 // {Begin|Commit|Rollback} Transaction Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum TransactionStmtKind {
     TransStmtBegin,
     // semantically identical to BEGIN
@@ -5570,8 +5598,8 @@ pub enum TransactionStmtKind {
 // SET Statement (includes RESET)
 // "SET var TO DEFAULT" and "RESET var" are semantically equivalent, but we
 // preserve the distinction in VariableSetKind for CreateCommandTag().
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum VariableSetKind {
     // SET var = value
     VarSetValue,
@@ -5588,8 +5616,8 @@ pub enum VariableSetKind {
 }
 
 // Create View Statement
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum ViewCheckOption {
     NoCheckOption,
     LocalCheckOption,
@@ -5600,8 +5628,8 @@ pub enum ViewCheckOption {
 // representation of WITH CHECK OPTION checks to be applied to new tuples
 // when inserting/updating an auto-updatable view, or RLS WITH CHECK
 // policies to be applied when inserting/updating a relation with RLS.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum WCOKind {
     // WCO on an auto-updatable view
     WcoViewCheck,
@@ -5620,8 +5648,8 @@ pub enum WCOKind {
 // Note: result type/typmod/collation are not stored, but can be deduced
 // from the XmlExprOp.  The type/typmod fields are just used for display
 // purposes, and are NOT necessarily the true result type of the node.
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum XmlExprOp {
     // XMLCONCAT(args)
     IsXmlconcat,
@@ -5641,8 +5669,8 @@ pub enum XmlExprOp {
     IsDocument,
 }
 
-#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 #[repr(u8)]
+#[derive(Debug, Deserialize_repr, Display, PartialEq)]
 pub enum XmlOptionType {
     XmloptionDocument,
     XmloptionContent,
