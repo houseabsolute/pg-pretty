@@ -233,9 +233,16 @@ my %not_optional = (
     ],
     FuncCall          => 'funcname',
     FunctionParameter => 'argType',
-    InsertStmt        => 'relation',
-    Integer           => 'ival',
-    JoinExpr          => [
+    IndexElem         => 'nulls_ordering',
+    IndexStmt         => [
+        qw(
+            relation
+            indexParams
+        )
+    ],
+    InsertStmt => 'relation',
+    Integer    => 'ival',
+    JoinExpr   => [
         qw(
             jointype
             larg

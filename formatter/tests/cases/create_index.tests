@@ -1,0 +1,88 @@
+++++
+CREATE UNIQUE INDEX
+----
+CREATE UNIQUE INDEX title_idx ON films (title)
+----
+CREATE UNIQUE INDEX title_idx ON films (title)
+----
+
+++++
+CREATE INDEX on expr
+----
+CREATE INDEX ON films ((lower(title)))
+----
+CREATE INDEX ON films (lower(title))
+----
+
+++++
+CREATE INDEX with COLLATE
+----
+CREATE INDEX title_idx_german ON films (title COLLATE "de_DE")
+----
+CREATE INDEX title_idx_german ON films ( title COLLATE "de_DE" )
+----
+
+++++
+CREATE INDEX (... NULLS FIRST)
+----
+CREATE INDEX title_idx_nulls_low ON films (title NULLS FIRST)
+----
+CREATE INDEX title_idx_nulls_low ON films ( title NULLS FIRST )
+----
+
+++++
+CREATE INDEX ... WITH
+----
+CREATE UNIQUE INDEX title_idx ON films (title) WITH (fillfactor = 70)
+----
+CREATE UNIQUE INDEX title_idx ON films (title) WITH ( fillfactor = 70 )
+----
+
+++++
+CREATE USING GIN ... WITH (fastupdate = off)
+----
+CREATE INDEX gin_idx ON documents_table USING GIN (locations) WITH (fastupdate = off)
+----
+CREATE INDEX gin_idx ON documents_table USING GIN (locations) WITH ( fastupdate = off )
+----
+
+++++
+CREATE INDEX ... TABLESPACE
+----
+CREATE INDEX code_idx ON films (code) TABLESPACE indexspace
+----
+CREATE INDEX code_idx ON films (code) TABLESPACE indexspace
+----
+
+++++
+CREATE INDEX ... USING on expr
+----
+CREATE INDEX pointloc
+    ON points USING gist (box(location,location))
+----
+CREATE INDEX pointloc ON points USING GIST ( box( location, location ) )
+----
+
+++++
+CREATE INDEX CONCURRENTLY
+----
+CREATE INDEX CONCURRENTLY sales_quantity_index ON sales_table (quantity)
+----
+CREATE INDEX CONCURRENTLY sales_quantity_index ON sales_table (quantity)
+----
+
+++++
+CREATE INDEX IF NOT EXISTS
+----
+CREATE INDEX IF NOT EXISTS sales_quantity_index ON sales_table (quantity)
+----
+CREATE INDEX IF NOT EXISTS sales_quantity_index ON sales_table (quantity)
+----
+
+++++
+CREATE INDEX CONCURRENTLY IF NOT EXISTS
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS sales_quantity_index ON sales_table (quantity)
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS sales_quantity_index ON sales_table (quantity)
+----

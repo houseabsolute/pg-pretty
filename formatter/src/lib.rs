@@ -150,6 +150,7 @@ impl Formatter {
 
             // CREATE statements
             Node::CreateStmt(c) => self.format_create_table_stmt(c),
+            Node::IndexStmt(c) => self.format_index_stmt(c),
 
             // expressions
             Node::AConst(a) => Ok(self.format_a_const(a)),
@@ -376,10 +377,7 @@ impl Formatter {
         create.push('\n');
 
         if let Some(opts) = &c.options {
-            create.push_str(&format!(
-                "WITH ( {} )\n",
-                self.formatted_list(opts)?.join(", ")
-            ));
+            create.push_str(&format!("WITH {}\n", self.parenthesized_list(opts)?));
         }
 
         if let Some(t) = &c.tablespacename {
@@ -531,6 +529,68 @@ impl Formatter {
             .map(|f| self.indent_str(f))
             .collect::<Vec<String>>()
             .join(",\n");
+        create.push('\n');
+
+        Ok(create)
+    }
+
+    //#[trace]
+    fn format_index_stmt(&mut self, i: &IndexStmt) -> R {
+        let mut create = "CREATE ".to_string();
+        if i.unique {
+            create.push_str("UNIQUE ");
+        }
+        create.push_str("INDEX ");
+
+        if i.concurrent {
+            create.push_str("CONCURRENTLY ");
+        }
+
+        if i.if_not_exists {
+            create.push_str("IF NOT EXISTS ");
+        }
+
+        if let Some(n) = &i.idxname {
+            create.push_str(n.as_ref());
+            create.push(' ');
+        }
+
+        create.push_str("ON ");
+        let RangeVarWrapper::RangeVar(r) = &i.relation;
+        create.push_str(&self.format_range_var(r));
+
+        if let Some(a) = &i.access_method {
+            // If there was no access method set in the original statement,
+            // this will be populated. I don't think there's a way to know if
+            // someone put an explicit "USING btree" in the statement.
+            if a != "btree" {
+                create.push_str(&format!(" USING {}", a.to_uppercase()));
+            }
+        }
+
+        let maker = |f: &mut Self| {
+            i.index_params
+                .iter()
+                .map(|IndexElemWrapper::IndexElem(p)| f.format_index_elem(p))
+                .collect::<Result<Vec<_>, _>>()
+        };
+
+        create.push(' ');
+        create.push_str(&self.one_line_or_many("", false, true, true, 0, maker)?);
+
+        if let Some(opts) = &i.options {
+            let params = opts
+                .iter()
+                .map(|DefElemWrapper::DefElem(d)| self.format_def_elem(d))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ");
+            create.push_str(&format!(" WITH ( {} )", params));
+        }
+
+        if let Some(t) = &i.table_space {
+            create.push_str(&format!(" TABLESPACE {}", t));
+        }
+
         create.push('\n');
 
         Ok(create)
@@ -979,12 +1039,12 @@ impl Formatter {
     fn format_def_elem(&mut self, d: &DefElem) -> R {
         let elem = d.defname.to_string();
         match elem.as_ref() {
-            "fillfactor" => Ok(format!(
+            "fastupdate" | "fillfactor" => Ok(format!(
                 "{} = {}",
                 elem,
                 self.format_value_or_type_name(&d.arg)?
             )),
-            _ => panic!("unhandled defname"),
+            r => panic!("unhandled defname: {}", r),
         }
     }
 
@@ -1722,10 +1782,9 @@ impl Formatter {
                         }
                     }
                 }
-                match s.sortby_nulls {
-                    SortByNulls::SortbyNullsDefault => (),
-                    SortByNulls::SortbyNullsFirst => el.push_str(" NULLS FIRST"),
-                    SortByNulls::SortbyNullsLast => el.push_str(" NULLS LAST"),
+                if let Some(sb) = f.format_sort_by_nulls_ordering(&s.sortby_nulls) {
+                    el.push(' ');
+                    el.push_str(&sb);
                 }
                 order_by.push(el);
             }
@@ -1733,6 +1792,14 @@ impl Formatter {
         };
 
         self.one_line_or_many("ORDER BY ", false, false, true, 0, maker)
+    }
+
+    fn format_sort_by_nulls_ordering(&self, o: &SortByNulls) -> Option<String> {
+        match o {
+            SortByNulls::SortbyNullsDefault => None,
+            SortByNulls::SortbyNullsFirst => Some("NULLS FIRST".into()),
+            SortByNulls::SortbyNullsLast => Some("NULLS LAST".into()),
+        }
     }
 
     //#[trace]
@@ -2033,10 +2100,7 @@ impl Formatter {
         }
 
         if let Some(opts) = &c.options {
-            cons.push_str(&format!(
-                " WITH ( {} )",
-                self.formatted_list(opts)?.join(", ")
-            ));
+            cons.push_str(&format!(" WITH {}", self.parenthesized_list(opts)?));
         }
 
         Ok(cons)
@@ -2230,8 +2294,20 @@ impl Formatter {
         }
 
         if let Some(c) = &i.collation {
+            elem.push_str(" COLLATE ");
+            // This will only ever have 1 element per gram.y. I'm not sure it
+            // can ever be something other than a StringStruct.
+            match &c[0] {
+                Node::StringStruct(StringStruct { str: name }) => {
+                    elem.push_str(&format!(r#""{}""#, name))
+                }
+                _ => elem.push_str(&self.format_node(&c[0])?),
+            }
+        }
+
+        if let Some(o) = self.format_sort_by_nulls_ordering(&i.nulls_ordering) {
             elem.push(' ');
-            elem.push_str(&self.formatted_list(c)?.join(" "));
+            elem.push_str(&o);
         }
 
         if let Some(o) = &i.opclass {

@@ -2361,7 +2361,7 @@ pub struct IndexElem {
     // ASC/DESC/default
     pub ordering: Option<SortByDir>, // SortByDir
     // FIRST/LAST/default
-    pub nulls_ordering: Option<SortByNulls>, // SortByNulls
+    pub nulls_ordering: SortByNulls, // SortByNulls
 }
 
 // Create Index Statement
@@ -2377,7 +2377,7 @@ pub struct IndexStmt {
     // name of new index, or NULL for default
     pub idxname: Option<String>, // char*
     // relation to build index on
-    pub relation: Option<RangeVarWrapper>, // RangeVar*
+    pub relation: RangeVarWrapper, // RangeVar*
     // name of access method (eg. btree)
     #[serde(rename = "accessMethod")]
     pub access_method: Option<String>, // char*
@@ -2386,7 +2386,7 @@ pub struct IndexStmt {
     pub table_space: Option<String>, // char*
     // columns to index: a list of IndexElem
     #[serde(rename = "indexParams")]
-    pub index_params: Option<Vec<IndexElemWrapper>>, // List*
+    pub index_params: Vec<IndexElemWrapper>, // List*
     // WITH clause options: a list of DefElem
     pub options: Option<Vec<DefElemWrapper>>, // List*
     // qualification (partial-index predicate)
