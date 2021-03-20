@@ -2312,7 +2312,7 @@ impl Formatter {
             // can ever be something other than a StringStruct.
             match &c[0] {
                 Node::StringStruct(StringStruct { str: name }) => {
-                    elem.push_str(&format!(r#""{}""#, name))
+                    elem.push_str(&Self::maybe_quote(name))
                 }
                 _ => elem.push_str(&self.format_node(&c[0])?),
             }
