@@ -1,3 +1,5 @@
+//mod intermediate;
+
 use pg_pretty_parser::{
     ast::*,
     flags::{FrameOptions, IntervalMask, IntervalMaskError},
@@ -10,6 +12,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum FormatterError {
+    #[error("root contained unexpected statement type: {stmt}")]
+    RootContainedUnexpectedStatement { stmt: String },
     #[error("unexpected node {node:?} in {func}")]
     UnexpectedNode { node: String, func: &'static str },
     #[error("no target list for select")]
@@ -135,22 +139,31 @@ impl Formatter {
 
     pub fn format_root_stmt(&mut self, root: &Root) -> R {
         match root {
-            Root::RawStmt(raw) => Ok(self.format_node(&raw.stmt)?),
+            Root::RawStmt(RawStmt { stmt, .. }) => {
+                match stmt {
+                    // DML
+                    Node::DeleteStmt(d) => self.format_delete_stmt(d),
+                    Node::InsertStmt(i) => self.format_insert_stmt(i),
+                    Node::SelectStmt(s) => self.format_select_stmt(s),
+                    Node::UpdateStmt(u) => self.format_update_stmt(u),
+
+                    // CREATE statements
+                    Node::CreateStmt(c) => self.format_create_table_stmt(c),
+                    Node::IndexStmt(c) => self.format_index_stmt(c),
+
+                    _ => Err(FormatterError::RootContainedUnexpectedStatement {
+                        stmt: stmt.to_string(),
+                    }),
+                }
+            }
         }
     }
 
     //#[trace]
     fn format_node(&mut self, node: &Node) -> R {
         match &node {
-            // CRUD statements
-            Node::DeleteStmt(d) => self.format_delete_stmt(d),
-            Node::InsertStmt(i) => self.format_insert_stmt(i),
+            // This can show up in subselects
             Node::SelectStmt(s) => self.format_select_stmt(s),
-            Node::UpdateStmt(u) => self.format_update_stmt(u),
-
-            // CREATE statements
-            Node::CreateStmt(c) => self.format_create_table_stmt(c),
-            Node::IndexStmt(c) => self.format_index_stmt(c),
 
             // expressions
             Node::AConst(a) => Ok(self.format_a_const(a)),
