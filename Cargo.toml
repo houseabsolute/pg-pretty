@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "bitflags_serde_int",
     "cli",
     "formatter",
     "parser",

@@ -1,12 +1,13 @@
 // The libpg_query library doesn't expose these flags. See
 // https://github.com/lfittl/libpg_query/issues/77.
-use bitflags_serde_int::Deserialize_bitflags_int;
+use serde::Deserialize;
 use std::convert::TryFrom;
 use thiserror::Error;
 
 // Values come from src/include/nodes/parsenodes.h.
 bitflags! {
-    #[derive(Deserialize_bitflags_int)]
+    #[serde(transparent)]
+    #[derive(Deserialize)]
     pub struct FrameOptions: u32 {
         const NONDEFAULT = 0x00001 ; /* any specified? */
         const RANGE = 0x00002 ; /* RANGE behavior */
