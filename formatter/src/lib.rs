@@ -764,19 +764,13 @@ impl Formatter {
     }
 
     fn format_a_indices(&mut self, i: &AIndices) -> R {
+        let upper = self.format_node(&*i.uidx)?;
         if !i.is_slice {
-            match &i.uidx {
-                Some(u) => return Ok(format!("[{}]", self.format_node(&*u)?)),
-                None => return Ok("[]".to_string()),
-            }
+            return Ok(format!("[{}]", upper));
         }
 
         let lower = match &i.lidx {
             Some(l) => self.format_node(&*l)?,
-            None => String::new(),
-        };
-        let upper = match &i.uidx {
-            Some(u) => self.format_node(&*u)?,
             None => String::new(),
         };
 

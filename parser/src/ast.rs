@@ -151,7 +151,7 @@ pub struct AIndices {
     // slice lower bound, if any
     pub lidx: Option<Box<Node>>, // Node*
     // subscript, or slice upper bound if any
-    pub uidx: Option<Box<Node>>, // Node*
+    pub uidx: Box<Node>, // Node*
 }
 
 // A_Indirection - select a field and/or array element from an expression

@@ -175,6 +175,7 @@ my %not_optional = (
             rexpr
         )
     ],
+    AIndices                   => 'uidx',
     AIndirection               => 'arg',
     Alias                      => 'aliasname',
     AlterDatabaseStmt          => 'options',
