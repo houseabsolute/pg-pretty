@@ -1,3 +1,7 @@
+// The generated code has names that clippy doesn't like. So SQLValueFunction
+// should be SqlValueFunction.
+#![allow(clippy::upper_case_acronyms)]
+// The generated Node type has a ridiculous number of variants.
 #![allow(clippy::large_enum_variant)]
 use crate::flags::FrameOptions;
 use serde::Deserialize;
