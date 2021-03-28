@@ -23,7 +23,7 @@ expect_stderr = true
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort=path" ]
+cmd = [ "omegasort", "--sort=path", "--unique" ]
 lint_flags = "--check"
 tidy_flags = "--in-place"
 ok_exit_codes = 0
