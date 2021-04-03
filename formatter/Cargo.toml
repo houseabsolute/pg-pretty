@@ -17,7 +17,7 @@ thiserror = "~1"
 
 [dev-dependencies]
 anyhow = "~1"
+k9 = "~0.11"
 lazy_static = "~1"
 prettydiff = "~0.3"
 regex = "~1"
-spectral = "~0.6"

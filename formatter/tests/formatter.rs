@@ -2,11 +2,11 @@
 extern crate lazy_static;
 
 use anyhow::{anyhow, Error};
+use k9::assert_greater_than;
 use pg_pretty_formatter::Formatter;
 use pg_pretty_parser::parser;
 use prettydiff::diff_lines;
 use regex::Regex;
-use spectral::prelude::*;
 use std::{env, fs, path};
 
 #[test]
@@ -30,9 +30,7 @@ fn test_all_cases() -> Result<(), Error> {
             file_count += 1;
         }
     }
-    assert_that(&file_count)
-        .named("number of files read")
-        .is_not_equal_to(0);
+    assert_greater_than!(file_count, 0, "found files to read");
     Ok(())
 }
 
@@ -74,9 +72,7 @@ fn run_tests_from(p: path::PathBuf) -> Result<(), Error> {
         test_one_case(&file, &caps["name"], &caps["input"], &caps["expect"])?;
     }
 
-    assert_that(&case_count)
-        .named(&format!("number of cases in {}", file))
-        .is_not_equal_to(0);
+    assert_greater_than!(case_count, 0, format!("{} contains cases", file));
     Ok(())
 }
 
