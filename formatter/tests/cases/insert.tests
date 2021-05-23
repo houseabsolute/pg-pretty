@@ -4,10 +4,8 @@ INSERT without columns
 INSERT INTO films VALUES
     ('UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes')
 ----
-INSERT INTO
-    films
-VALUES
-    ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
+INSERT INTO films
+VALUES ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
 ----
 
 ++++
@@ -16,10 +14,8 @@ INSERT with columns
 INSERT INTO films (code, title, did, date_prod, kind)
   VALUES ('T_601', 'Yojimbo', 106, '1961-06-16', 'Drama')
 ----
-INSERT INTO
-    films ( code, title, did, date_prod, kind )
-VALUES
-    ( 'T_601', 'Yojimbo', 106, '1961-06-16', 'Drama' )
+INSERT INTO films ( code, title, did, date_prod, kind )
+VALUES ( 'T_601', 'Yojimbo', 106, '1961-06-16', 'Drama' )
 ----
 
 ++++
@@ -27,16 +23,14 @@ INSERT with long columns list
 ----
 INSERT INTO films ( very_long_column_name1, very_long_column_name2,very_long_column_name3,very_long_column_name4,very_long_column_name5 )    VALUES (1,2,3,4,5)
 ----
-INSERT INTO
-    films (
-        very_long_column_name1,
-        very_long_column_name2,
-        very_long_column_name3,
-        very_long_column_name4,
-        very_long_column_name5
-    )
-VALUES
-    ( 1, 2, 3, 4, 5 )
+INSERT INTO films (
+    very_long_column_name1,
+    very_long_column_name2,
+    very_long_column_name3,
+    very_long_column_name4,
+    very_long_column_name5
+)
+VALUES ( 1, 2, 3, 4, 5 )
 ----
 
 ++++
@@ -44,22 +38,20 @@ INSERT with long columns and values lists
 ----
 INSERT INTO films ( very_long_column_name1, very_long_column_name2,very_long_column_name3,very_long_column_name4,very_long_column_name5 )    VALUES ( 'very long column value 1', 'very long column value 2', 'very long column value 3', 'very long column value 4', 'very long column value 5' )
 ----
-INSERT INTO
-    films (
-        very_long_column_name1,
-        very_long_column_name2,
-        very_long_column_name3,
-        very_long_column_name4,
-        very_long_column_name5
-    )
-VALUES
-    (
-        'very long column value 1',
-        'very long column value 2',
-        'very long column value 3',
-        'very long column value 4',
-        'very long column value 5'
-    )
+INSERT INTO films (
+    very_long_column_name1,
+    very_long_column_name2,
+    very_long_column_name3,
+    very_long_column_name4,
+    very_long_column_name5
+)
+VALUES (
+    'very long column value 1',
+    'very long column value 2',
+    'very long column value 3',
+    'very long column value 4',
+    'very long column value 5'
+)
 ----
 
 ++++
@@ -69,11 +61,9 @@ INSERT INTO films (code, title, did, date_prod, kind)
   VALUES ('T_601', 'Yojimbo', 106, '1961-06-16', 'Drama')
 , ( 'T_602', 'Sanjuro', 107, '1962-01-01', 'Drama')
 ----
-INSERT INTO
-    films ( code, title, did, date_prod, kind )
-VALUES
-    ( 'T_601', 'Yojimbo', 106, '1961-06-16', 'Drama' ),
-    ( 'T_602', 'Sanjuro', 107, '1962-01-01', 'Drama' )
+INSERT INTO films ( code, title, did, date_prod, kind )
+VALUES ( 'T_601', 'Yojimbo', 106, '1961-06-16', 'Drama' ),
+       ( 'T_602', 'Sanjuro', 107, '1962-01-01', 'Drama' )
 ----
 
 ++++
@@ -81,29 +71,26 @@ INSERT with long columns and values lists with multi-values
 ----
 INSERT INTO films ( very_long_column_name1, very_long_column_name2,very_long_column_name3,very_long_column_name4,very_long_column_name5 )    VALUES ( 'very long column value 1', 'very long column value 2', 'very long column value 3', 'very long column value 4', 'very long column value 5' ),  ( 'very long column value A', 'very long column value B', 'very long column value C', 'very long column value D', 'very long column value E' )
 ----
-INSERT INTO
-    films (
-        very_long_column_name1,
-        very_long_column_name2,
-        very_long_column_name3,
-        very_long_column_name4,
-        very_long_column_name5
-    )
-VALUES
-    (
-        'very long column value 1',
-        'very long column value 2',
-        'very long column value 3',
-        'very long column value 4',
-        'very long column value 5'
-    ),
-    (
-        'very long column value A',
-        'very long column value B',
-        'very long column value C',
-        'very long column value D',
-        'very long column value E'
-    )
+INSERT INTO films (
+    very_long_column_name1,
+    very_long_column_name2,
+    very_long_column_name3,
+    very_long_column_name4,
+    very_long_column_name5
+)
+VALUES (
+    'very long column value 1',
+    'very long column value 2',
+    'very long column value 3',
+    'very long column value 4',
+    'very long column value 5'
+), (
+    'very long column value A',
+    'very long column value B',
+    'very long column value C',
+    'very long column value D',
+    'very long column value E'
+)
 ----
 
 ++++
@@ -117,39 +104,50 @@ INSERT INTO films ( very_long_column_name1, very_long_column_name2,very_long_col
   ( 'very long column value A', 'very long column value B', 'very long column value C', 'very long column value D', 'very long column value E' ),
   ( 'very long column value A', 'very long column value B', 'very long column value C', 'very long column value D', 'very long column value E' )
 ----
-INSERT INTO
-    films (
-        very_long_column_name1,
-        very_long_column_name2,
-        very_long_column_name3,
-        very_long_column_name4,
-        very_long_column_name5
-    )
-VALUES
-    ( '1', '2', '3', '4', '5' ),
-    (
-        'very long column value A',
-        'very long column value B',
-        'very long column value C',
-        'very long column value D',
-        'very long column value E'
-    ),
-    ( '2', '3', '4', '5', '6' ),
-    ( '2', '3', '4', '5', '6' ),
-    (
-        'very long column value A',
-        'very long column value B',
-        'very long column value C',
-        'very long column value D',
-        'very long column value E'
-    ),
-    (
-        'very long column value A',
-        'very long column value B',
-        'very long column value C',
-        'very long column value D',
-        'very long column value E'
-    )
+INSERT INTO films (
+    very_long_column_name1,
+    very_long_column_name2,
+    very_long_column_name3,
+    very_long_column_name4,
+    very_long_column_name5
+)
+VALUES (
+    '1',
+    '2',
+    '3',
+    '4',
+    '5'
+), (
+    'very long column value A',
+    'very long column value B',
+    'very long column value C',
+    'very long column value D',
+    'very long column value E'
+), (
+    '2',
+    '3',
+    '4',
+    '5',
+    '6'
+), (
+    '2',
+    '3',
+    '4',
+    '5',
+    '6'
+), (
+    'very long column value A',
+    'very long column value B',
+    'very long column value C',
+    'very long column value D',
+    'very long column value E'
+), (
+    'very long column value A',
+    'very long column value B',
+    'very long column value C',
+    'very long column value D',
+    'very long column value E'
+)
 ----
 
 ++++
@@ -157,11 +155,9 @@ INSERT ... OVERRIDING SYSTEM VALUE
 ----
 INSERT INTO films OVERRIDING SYSTEM VALUE VALUES ( 1, 2,3)
 ----
-INSERT INTO
-    films
+INSERT INTO films
 OVERRIDING SYSTEM VALUE
-VALUES
-    ( 1, 2, 3 )
+VALUES ( 1, 2, 3 )
 ----
 
 ++++
@@ -169,11 +165,9 @@ INSERT ... OVERRIDING USER VALUE
 ----
 INSERT INTO films OVERRIDING USER VALUE VALUES ( 1, 2,3)
 ----
-INSERT INTO
-    films
+INSERT INTO films
 OVERRIDING USER VALUE
-VALUES
-    ( 1, 2, 3 )
+VALUES ( 1, 2, 3 )
 ----
 
 ++++
@@ -181,10 +175,9 @@ INSERT ... SELECT
 ----
 INSERT INTO films SELECT * from films_to_insert
 ----
-INSERT INTO
-    films
+INSERT INTO films
 SELECT *
-FROM films_to_insert
+  FROM films_to_insert
 ----
 
 ++++
@@ -192,10 +185,9 @@ INSERT ... SELECT
 ----
 INSERT INTO films (x,y,z) SELECT * from films_to_insert
 ----
-INSERT INTO
-    films ( x, y, z )
+INSERT INTO films ( x, y, z )
 SELECT *
-FROM films_to_insert
+  FROM films_to_insert
 ----
 
 ++++
@@ -203,8 +195,7 @@ INSERT DEFAULT VALUES
 ----
 INSERT INTO films DEFAULT VALUES
 ----
-INSERT INTO
-    films
+INSERT INTO films
 DEFAULT VALUES
 ----
 
@@ -214,10 +205,8 @@ INSERT ... VALUES ( ..., DEFAULT )
 ----
 INSERT INTO films VALUES (1, DEFAULT, 3)
 ----
-INSERT INTO
-    films
-VALUES
-    ( 1, DEFAULT, 3 )
+INSERT INTO films
+VALUES ( 1, DEFAULT, 3 )
 ----
 
 ++++
@@ -225,11 +214,9 @@ INSERT OVERRIDING SYSTEM VALUE
 ----
 INSERT INTO films (id) OVERRIDING SYSTEM VALUE VALUES (42)
 ----
-INSERT INTO
-    films (id)
+INSERT INTO films (id)
 OVERRIDING SYSTEM VALUE
-VALUES
-    (42)
+VALUES (42)
 ----
 
 ++++
@@ -237,11 +224,9 @@ INSERT OVERRIDING USER VALUE
 ----
 INSERT INTO films (id) OVERRIDING USER VALUE VALUES (42)
 ----
-INSERT INTO
-    films (id)
+INSERT INTO films (id)
 OVERRIDING USER VALUE
-VALUES
-    (42)
+VALUES (42)
 ----
 
 ++++
@@ -249,12 +234,9 @@ INSERT ... ON CONFLICT DO NOTHING
 ----
 INSERT INTO films (id, name) VALUES (42, 'The Pillow Book') ON CONFLICT (id) DO NOTHING
 ----
-INSERT INTO
-    films ( id, name )
-VALUES
-    ( 42, 'The Pillow Book' )
-ON CONFLICT (id)
-DO NOTHING
+INSERT INTO films ( id, name )
+VALUES ( 42, 'The Pillow Book' )
+ON CONFLICT (id) DO NOTHING
 ----
 
 ++++
@@ -266,13 +248,12 @@ INSERT INTO distributors AS d (did, dname, dyear) VALUES (8, 'Anvil Distribution
         dyear = 2012
     WHERE d.zipcode <> '21201';
 ----
-INSERT INTO
-    distributors AS d ( did, dname, dyear )
-VALUES
-    ( 8, 'Anvil Distribution', 2012 )
+INSERT INTO distributors AS d ( did, dname, dyear )
+VALUES ( 8, 'Anvil Distribution', 2012 )
 ON CONFLICT (did)
-DO UPDATE SET dname = excluded.dname || ' (formerly ' || d.dname || ')',
-              dyear = 2012
+DO UPDATE
+      SET dname = excluded.dname || ' (formerly ' || d.dname || ')',
+          dyear = 2012
     WHERE d.zipcode <> '21201'
 ----
 
@@ -283,10 +264,8 @@ INSERT INTO films VALUES
     ('UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes')
 RETURNING *
 ----
-INSERT INTO
-    films
-VALUES
-    ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
+INSERT INTO films
+VALUES ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
 RETURNING *
 ----
 
@@ -299,10 +278,8 @@ RETURNING code,
  title, something, release_date, genre, 
 run_time
 ----
-INSERT INTO
-    films
-VALUES
-    ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
+INSERT INTO films
+VALUES ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
 RETURNING code, title, something, release_date, genre, run_time
 ----
 
@@ -315,10 +292,8 @@ RETURNING code AS studio_code,
  title, something, release_date   AS d, genre, 
 run_time
 ----
-INSERT INTO
-    films
-VALUES
-    ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
+INSERT INTO films
+VALUES ( 'UA502', 'Bananas', 105, '1971-07-13', 'Comedy', '82 minutes' )
 RETURNING code AS studio_code, title, something, release_date AS d, genre, run_time
 ----
 
@@ -333,11 +308,9 @@ RETURNING code AS studio_code,
  title, something, release_date   AS d, genre, 
 run_time
 ----
-INSERT INTO
-    films ( code, title, did, date_prod, kind )
+INSERT INTO films ( code, title, did, date_prod, kind )
 OVERRIDING USER VALUE
-VALUES
-    ( 'T_601', 'Yojimbo', 106, '1961-06-16', 'Drama' )
+VALUES ( 'T_601', 'Yojimbo', 106, '1961-06-16', 'Drama' )
 ON CONFLICT (code)
 DO UPDATE SET title = 'Rashomon'
 RETURNING code AS studio_code, title, something, release_date AS d, genre, run_time

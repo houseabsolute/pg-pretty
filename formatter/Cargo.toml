@@ -9,6 +9,8 @@ license = "GPL-3.0"
 edition = "2018"
 
 [dependencies]
+env_logger = "~0.8"
+log = "~0.4"
 pg-pretty-parser = { version = "0.0.1", path = "../parser" }
 scopeguard = "~1"
 strum_macros = "~0.20"

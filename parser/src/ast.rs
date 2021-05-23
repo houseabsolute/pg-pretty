@@ -1936,7 +1936,7 @@ pub struct DeleteStmt {
     pub where_clause: Option<Box<Node>>, // Node*
     // list of expressions to return
     #[serde(rename = "returningList")]
-    pub returning_list: Option<List>, // List*
+    pub returning_list: Option<Vec<ResTargetWrapper>>, // List*
     // WITH clause
     #[serde(rename = "withClause")]
     pub with_clause: Option<WithClauseWrapper>, // WithClause*
@@ -2501,7 +2501,7 @@ pub struct InsertStmt {
     pub on_conflict_clause: Option<OnConflictClauseWrapper>, // OnConflictClause*
     // list of expressions to return
     #[serde(rename = "returningList")]
-    pub returning_list: Option<List>, // List*
+    pub returning_list: Option<Vec<ResTargetWrapper>>, // List*
     // WITH clause
     #[serde(rename = "withClause")]
     pub with_clause: Option<WithClauseWrapper>, // WithClause*
@@ -2770,7 +2770,7 @@ pub struct OnConflictClause {
     pub infer: Option<InferClauseWrapper>, // InferClause*
     // the target list (of ResTarget)
     #[serde(rename = "targetList")]
-    pub target_list: Option<List>, // List*
+    pub target_list: Option<Vec<ResTargetWrapper>>, // List*
     // qualifications
     #[serde(rename = "whereClause")]
     pub where_clause: Option<Box<Node>>, // Node*
@@ -3051,7 +3051,7 @@ pub struct Query {
     pub on_conflict: Option<OnConflictExprWrapper>, // OnConflictExpr*
     // return-values list (of TargetEntry)
     #[serde(rename = "returningList")]
-    pub returning_list: Option<List>, // List*
+    pub returning_list: Option<Vec<ResTargetWrapper>>, // List*
     // a list of SortGroupClause's
     #[serde(rename = "groupClause")]
     pub group_clause: Option<Vec<SortGroupClauseWrapper>>, // List*
@@ -4006,7 +4006,7 @@ pub struct SubLink {
     #[serde(rename = "operName")]
     pub oper_name: Option<List>, // List*
     // subselect as Query* or raw parsetree
-    pub subselect: Box<Node>, // Node*
+    pub subselect: SelectStmtWrapper, // Node*
     // token location, or -1 if unknown
     pub location: Option<i64>, // int
 }
@@ -4322,7 +4322,7 @@ pub struct UpdateStmt {
     pub relation: RangeVarWrapper, // RangeVar*
     // the target list (of ResTarget)
     #[serde(rename = "targetList")]
-    pub target_list: List, // List*
+    pub target_list: Vec<ResTargetWrapper>, // List*
     // qualifications
     #[serde(rename = "whereClause")]
     pub where_clause: Option<Box<Node>>, // Node*
@@ -4331,7 +4331,7 @@ pub struct UpdateStmt {
     pub from_clause: Option<List>, // List*
     // list of expressions to return
     #[serde(rename = "returningList")]
-    pub returning_list: Option<List>, // List*
+    pub returning_list: Option<Vec<ResTargetWrapper>>, // List*
     // WITH clause
     #[serde(rename = "withClause")]
     pub with_clause: Option<WithClauseWrapper>, // WithClause*

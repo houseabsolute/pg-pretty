@@ -1,5 +1,5 @@
 use eyre::Result;
-use pg_pretty_formatter::Formatter;
+use pg_pretty_formatter::Transformer;
 use pg_pretty_parser::{ast::Root, parser};
 
 fn main() -> Result<()> {
@@ -20,7 +20,7 @@ LIMIT 10 OFFSET 1
 "#;
     let res = parser::parse_sql(sql)?;
     let Root::RawStmt(stmt) = &res[0];
-    let mut f = Formatter::new();
+    let mut f = Transformer::new();
     println!("{:#?}", stmt);
     for stmt in &res {
         println!("{}", f.format_root_stmt(&stmt)?)

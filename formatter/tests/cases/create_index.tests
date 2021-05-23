@@ -11,7 +11,15 @@ CREATE INDEX on expr
 ----
 CREATE INDEX ON films ((lower(title)))
 ----
-CREATE INDEX ON films (lower(title))
+CREATE INDEX ON films ( lower(title) )
+----
+
+++++
+CREATE INDEX on multiple columns
+----
+CREATE INDEX ON films (title,year,director)
+----
+CREATE INDEX ON films ( title, year, director )
 ----
 
 ++++
@@ -35,7 +43,7 @@ CREATE INDEX ... WITH
 ----
 CREATE UNIQUE INDEX title_idx ON films (title) WITH (fillfactor = 70)
 ----
-CREATE UNIQUE INDEX title_idx ON films (title) WITH ( fillfactor = 70 )
+CREATE UNIQUE INDEX title_idx ON films (title) WITH ( FILLFACTOR = 70 )
 ----
 
 ++++
@@ -43,7 +51,7 @@ CREATE USING GIN ... WITH (fastupdate = off)
 ----
 CREATE INDEX gin_idx ON documents_table USING GIN (locations) WITH (fastupdate = off)
 ----
-CREATE INDEX gin_idx ON documents_table USING GIN (locations) WITH ( fastupdate = off )
+CREATE INDEX gin_idx ON documents_table USING gin (locations) WITH ( FASTUPDATE = off )
 ----
 
 ++++
@@ -60,7 +68,7 @@ CREATE INDEX ... USING on expr
 CREATE INDEX pointloc
     ON points USING gist (box(location,location))
 ----
-CREATE INDEX pointloc ON points USING GIST ( box( location, location ) )
+CREATE INDEX pointloc ON points USING gist ( box( location, location ) )
 ----
 
 ++++
@@ -85,4 +93,16 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS
 CREATE INDEX CONCURRENTLY IF NOT EXISTS sales_quantity_index ON sales_table (quantity)
 ----
 CREATE INDEX CONCURRENTLY IF NOT EXISTS sales_quantity_index ON sales_table (quantity)
+----
+
+++++
+CREATE INDEX over max line length
+----
+CREATE INDEX IF NOT EXISTS sales_quantity_index ON sales_table USING gist (quantity, some_func(some_column, another_col)) WITH (fillfactor = 70)
+----
+CREATE INDEX IF NOT EXISTS sales_quantity_index
+    ON sales_table
+    USING gist
+    ( quantity, some_func( some_column, another_col ) )
+    WITH ( FILLFACTOR = 70 )
 ----

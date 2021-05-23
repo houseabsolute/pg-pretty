@@ -3,7 +3,8 @@ extern crate lazy_static;
 
 use anyhow::{anyhow, Error};
 use k9::assert_greater_than;
-use pg_pretty_formatter::Formatter;
+use log::debug;
+use pg_pretty_formatter::Transformer;
 use pg_pretty_parser::parser;
 use prettydiff::diff_lines;
 use regex::Regex;
@@ -11,6 +12,8 @@ use std::{env, fs, path};
 
 #[test]
 fn test_all_cases() -> Result<(), Error> {
+    env_logger::init();
+
     let mut case_dir = env::current_dir()?;
     case_dir.push("tests");
     case_dir.push("cases");
@@ -77,19 +80,15 @@ fn run_tests_from(p: path::PathBuf) -> Result<(), Error> {
 }
 
 fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<(), Error> {
-    let mut f = Formatter::new();
+    let mut t = Transformer::new();
     match parser::parse_sql(input) {
         Err(e) => Err(anyhow!("Could not parse `{}` ({})", input, e)),
         Ok(p) => {
-            let got = &f
+            let got = &t
                 .format_root_stmt(&p[0])
                 .map_err(|e| anyhow!("{}\n{:#?}", e, &p[0]))?;
 
             if expect != got {
-                if env::var_os("PG_PRETTY_DEBUG_PARSE").is_some() {
-                    println!("{:#?}", p);
-                }
-
                 let diff = diff_lines(expect, got);
                 diff.names("expect", "got").prettytable();
 
@@ -100,7 +99,7 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
                         expect
                             .chars()
                             .map(|c| c.escape_debug().to_string())
-                            .collect::<Vec<String>>()
+                            .collect::<Vec<_>>()
                             .join("")
                     );
                     println!();
@@ -109,7 +108,7 @@ fn test_one_case(file: &str, name: &str, input: &str, expect: &str) -> Result<()
                         "{}",
                         got.chars()
                             .map(|c| c.escape_debug().to_string())
-                            .collect::<Vec<String>>()
+                            .collect::<Vec<_>>()
                             .join("")
                     );
                 }

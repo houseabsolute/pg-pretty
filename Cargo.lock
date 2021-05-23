@@ -472,8 +472,10 @@ name = "pg-pretty-formatter"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "env_logger",
  "k9",
  "lazy_static",
+ "log",
  "pg-pretty-parser",
  "prettydiff",
  "regex",
@@ -488,6 +490,7 @@ version = "0.0.1"
 dependencies = [
  "bitflags",
  "libpg_query-sys",
+ "log",
  "serde",
  "serde_json",
  "serde_repr",

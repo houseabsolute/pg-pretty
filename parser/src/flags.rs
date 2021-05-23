@@ -1,13 +1,14 @@
 // The libpg_query library doesn't expose these flags. See
 // https://github.com/lfittl/libpg_query/issues/77.
+
 use serde::Deserialize;
 use std::convert::TryFrom;
 use thiserror::Error;
 
 // Values come from src/include/nodes/parsenodes.h.
 bitflags! {
-    #[serde(transparent)]
     #[derive(Deserialize)]
+    #[serde(transparent)]
     pub struct FrameOptions: u32 {
         const NONDEFAULT = 0x00001 ; /* any specified? */
         const RANGE = 0x00002 ; /* RANGE behavior */
@@ -78,12 +79,12 @@ pub enum IntervalMaskError {
 }
 
 impl IntervalMask {
-    pub fn from_i64(i: i64) -> Result<IntervalMask, IntervalMaskError> {
+    pub fn new_from_i64(i: i64) -> Result<IntervalMask, IntervalMaskError> {
         let u = u32::try_from(i)?;
         Self::from_bits(u).ok_or(IntervalMaskError::InvalidIntervalMask { val: u })
     }
 
-    pub fn type_modifiers(self) -> Result<String, IntervalMaskError> {
+    pub fn type_modifiers(self) -> Result<Vec<&'static str>, IntervalMaskError> {
         let mut mods: Vec<&'static str> = vec![];
         if self.contains(Self::YEAR) {
             mods.push("YEAR");
@@ -104,6 +105,8 @@ impl IntervalMask {
             mods.push("SECOND");
         }
 
+        // We don't have to check for length 0 because our constructor rejects
+        // a mask which contains bits that don't correspond to a modifier.
         if mods.len() > 2 {
             return Err(IntervalMaskError::TooManyModifiers {
                 count: mods.len(),
@@ -111,10 +114,6 @@ impl IntervalMask {
             });
         }
 
-        if mods.len() == 2 {
-            return Ok(mods.join(" TO "));
-        }
-
-        Ok(mods[0].into())
+        Ok(mods)
     }
 }
