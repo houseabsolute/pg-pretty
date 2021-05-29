@@ -3,7 +3,6 @@ mod formatter;
 
 use context::*;
 use formatter::*;
-use log::debug;
 use pg_pretty_parser::{
     ast::*,
     flags::{FrameOptions, IntervalMask, IntervalMaskError},
@@ -190,9 +189,10 @@ impl Transformer {
     //#[trace]
     fn delete_stmt(&mut self, d: &DeleteStmt) -> Result<Statement> {
         let mut delete = Statement::new(self.max_line_len, self.indent_width);
+        delete.push_keyword("DELETE");
 
         let mut from = ChunkList::new(Joiner::Space);
-        from.push_keyword("DELETE FROM");
+        from.push_keyword("FROM");
 
         let RangeVarWrapper::RangeVar(r) = &d.relation;
         from.push_chunk(self.range_var(r));
@@ -574,6 +574,7 @@ impl Transformer {
 
         index.push_chunk(Box::new(on));
 
+        let mut using_and_elems = ChunkList::new(Joiner::Space);
         if let Some(a) = &i.access_method {
             // If there was no access method set in the original statement,
             // this will be populated. I don't think there's a way to know if
@@ -583,7 +584,7 @@ impl Transformer {
                 using.push_keyword("USING");
                 using.push_name(a);
 
-                index.push_chunk(Box::new(using));
+                using_and_elems.push_chunk(Box::new(using));
             }
         }
 
@@ -591,7 +592,8 @@ impl Transformer {
         for IndexElemWrapper::IndexElem(p) in &i.index_params {
             elems.push_chunk(self.index_elem(p)?);
         }
-        index.push_chunk(Box::new(elems));
+        using_and_elems.push_chunk(Box::new(elems));
+        index.push_chunk(Box::new(using_and_elems));
 
         if let Some(opts) = &i.options {
             let mut with = ChunkList::new(Joiner::Space);
@@ -702,7 +704,7 @@ impl Transformer {
             }
         }
 
-        return Ok(Box::new(res_target));
+        Ok(Box::new(res_target))
     }
 
     //#[trace]
@@ -1325,7 +1327,7 @@ impl Transformer {
         }
     }
 
-    fn sub_link_oper_name(&self, name: &List) -> Result<ChunkList> {
+    fn sub_link_oper_name(&self, name: &[Node]) -> Result<ChunkList> {
         let mut oper_name = ChunkList::new(Joiner::Space);
         for n in name {
             match n {
@@ -1740,7 +1742,7 @@ impl Transformer {
         let n = match &tn.names {
             Some(names) => {
                 let mut joined = Tokens::new(Joiner::Period);
-                let mut renamed = names
+                let renamed = names
                     .iter()
                     // Is this clone necessary? It feels like there should be a
                     // way to work with the original reference until the join.
@@ -1748,15 +1750,15 @@ impl Transformer {
                         self.type_renaming.get(&n.str).unwrap_or(&n.str).clone()
                     })
                     .filter(|n| n != "pg_catalog");
-                let last = renamed.by_ref().last().unwrap().clone();
                 for r in renamed {
                     joined.push_name(r);
                 }
-                last
+                joined
             }
             None => panic!("not sure how to handle a nameless type"),
         };
-        type_name.push_name(&n);
+        let last_token = n.last_token().unwrap();
+        type_name.push_chunk(Box::new(n));
 
         if let Some(m) = &tn.typemod {
             // A -1 means it has no modifier.
@@ -1767,7 +1769,7 @@ impl Transformer {
         }
         if let Some(m) = &tn.typmods {
             // XXX - I think interval may also have a special case for two?
-            if n.to_uppercase().eq("interval") {
+            if last_token.to_uppercase().eq("INTERVAL") {
                 if m.len() == 1 {
                     // If the type is INTERVAL and we have one node, then this
                     // is an integer constant. That constant is actually an
@@ -2290,7 +2292,7 @@ impl Transformer {
 
         let mut list = ChunkList::new(Joiner::Comma);
         for ResTargetWrapper::ResTarget(t) in rt {
-            list.push_chunk(self.res_target(t, false)?);
+            list.push_chunk(self.res_target(t, true)?);
         }
 
         returning.push_chunk(Box::new(list));

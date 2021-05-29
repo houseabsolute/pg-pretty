@@ -171,6 +171,13 @@ impl Tokens {
     pub fn push_operator(&mut self, operator: &str) {
         self.tokens.push(Token::new_operator(operator));
     }
+
+    pub fn last_token(&self) -> Option<String> {
+        match self.tokens.is_empty() {
+            true => None,
+            false => Some(self.tokens[self.tokens.len() - 1].as_str().to_string()),
+        }
+    }
 }
 
 impl Chunk for Tokens {
@@ -244,33 +251,45 @@ impl Chunk for ChunkList {
         }
 
         let mut out = start_from_context(ctxt);
-        out.push_str(
-            &self
-                .chunks
-                .iter()
-                .map(|c| c.formatted(FormatContext::SingleLine, len, indenter))
-                .collect::<Result<Vec<_>, _>>()?
-                .join(self.joiner.single_line_joiner()),
-        );
+        let formatted = &self
+            .chunks
+            .iter()
+            .map(|c| c.formatted(FormatContext::SingleLine, len, indenter))
+            .collect::<Result<Vec<_>, _>>()?;
+        for (i, f) in formatted.iter().enumerate() {
+            // If one of the formatted chunks was a SubStatement, it will
+            // already have its own leading newline, in which case joining it
+            // with a space doesn't make any sense. This is kind of gross.
+            if i > 0 {
+                if f.starts_with('\n') {
+                    out.push_str(self.joiner.multi_line_joiner());
+                } else {
+                    out.push_str(self.joiner.single_line_joiner());
+                }
+            }
+            out.push_str(&f);
+        }
 
         // If one of the chunks contains newlines we only want to look at the
         // length of the first line? I suspect there's a better way to
         // approach this.
-        if len + out.find('\n').unwrap_or(out.len()) <= indenter.max_line_len {
+        if len + out.find('\n').unwrap_or_else(|| out.len()) <= indenter.max_line_len {
+            debug!("SL = [{}]", out);
             return Ok(out);
         }
 
-        let indenter = indenter.next_indenter();
+        let next = indenter.next_indenter();
         out = start_from_context(ctxt);
         out.push_str(
             &self
                 .chunks
                 .iter()
-                .map(|c| c.formatted(FormatContext::MultiLine, len, &indenter))
+                .map(|c| c.formatted(FormatContext::MultiLine, len, &next))
                 .collect::<Result<Vec<_>, _>>()?
                 .join(self.joiner.multi_line_joiner()),
         );
 
+        debug!("ML = [{}]", out);
         Ok(out)
     }
 
@@ -294,25 +313,24 @@ impl Delimiter {
     }
 }
 
+#[derive(Debug)]
+pub struct DelimiterContents {
+    prefix: Vec<Box<dyn Chunk>>,
+    args: Vec<Box<dyn Chunk>>,
+    suffix: Vec<Box<dyn Chunk>>,
+}
+
 pub trait Delimited {
     fn format_args_single_line(
         &self,
         len: usize,
         indenter: &Indenter,
-        prefix: &[Box<dyn Chunk>],
-        args: &[Box<dyn Chunk>],
-        suffix: &[Box<dyn Chunk>],
+        contents: &DelimiterContents,
         joiner: &Joiner,
         delimiter: &Delimiter,
     ) -> Result<String, FormatterError> {
-        let (p, a, s) = self.formatted_chunks(
-            FormatContext::SingleLine,
-            len,
-            indenter,
-            prefix,
-            args,
-            suffix,
-        )?;
+        let (p, a, s) =
+            self.formatted_chunks(FormatContext::SingleLine, len, indenter, contents)?;
         let args = a.join(joiner.single_line_joiner());
 
         let (left_delim, right_delim) = delimiter.delimiters();
@@ -339,20 +357,12 @@ pub trait Delimited {
         &self,
         len: usize,
         indenter: &Indenter,
-        prefix: &[Box<dyn Chunk>],
-        args: &[Box<dyn Chunk>],
-        suffix: &[Box<dyn Chunk>],
+        contents: &DelimiterContents,
         joiner: &Joiner,
         delimiter: &Delimiter,
     ) -> Result<String, FormatterError> {
-        let (p, a, s) = self.formatted_chunks(
-            FormatContext::MultiLine,
-            len,
-            &indenter,
-            prefix,
-            args,
-            suffix,
-        )?;
+        let (p, a, s) =
+            self.formatted_chunks(FormatContext::MultiLine, len, &indenter, contents)?;
         let args = a
             .iter()
             // We will remove any leading newlines and add trailing ones
@@ -380,22 +390,23 @@ pub trait Delimited {
         ctxt: FormatContext,
         len: usize,
         indenter: &Indenter,
-        prefix: &[Box<dyn Chunk>],
-        args: &[Box<dyn Chunk>],
-        suffix: &[Box<dyn Chunk>],
+        contents: &DelimiterContents,
     ) -> Result<(String, Vec<String>, String), FormatterError> {
-        let p = prefix
+        let p = contents
+            .prefix
             .iter()
             .map(|c| c.formatted(ctxt, len, indenter))
             .collect::<Result<Vec<_>, _>>()?
             .join(" ");
 
-        let a = args
+        let a = contents
+            .args
             .iter()
             .map(|c| c.formatted(ctxt, len, indenter))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let s = suffix
+        let s = contents
+            .suffix
             .iter()
             .map(|c| c.formatted(ctxt, len, indenter))
             .collect::<Result<Vec<_>, _>>()?
@@ -412,9 +423,7 @@ pub trait Delimited {
 #[derive(Debug)]
 pub struct DelimitedExpression {
     delimiter: Delimiter,
-    prefix: Vec<Box<dyn Chunk>>,
-    args: Vec<Box<dyn Chunk>>,
-    suffix: Vec<Box<dyn Chunk>>,
+    contents: DelimiterContents,
     joiner: Joiner,
 }
 
@@ -422,36 +431,40 @@ impl DelimitedExpression {
     pub fn new(delimiter: Delimiter, joiner: Joiner) -> Self {
         Self {
             delimiter,
-            prefix: vec![],
-            args: vec![],
-            suffix: vec![],
+            contents: DelimiterContents {
+                prefix: vec![],
+                args: vec![],
+                suffix: vec![],
+            },
             joiner,
         }
     }
 
-    pub fn push_prefix_chunk(&mut self, chunk: Box<dyn Chunk>) {
-        self.prefix.push(chunk);
-    }
+    // pub fn push_prefix_chunk(&mut self, chunk: Box<dyn Chunk>) {
+    //     self.prefix.push(chunk);
+    // }
 
     pub fn push_chunk(&mut self, chunk: Box<dyn Chunk>) {
-        self.args.push(chunk);
+        self.contents.args.push(chunk);
     }
 
-    pub fn push_keyword(&mut self, kw: &str) {
-        self.args.push(Box::new(Token::new_keyword(kw)));
-    }
+    // pub fn push_keyword(&mut self, kw: &str) {
+    //     self.contents.args.push(Box::new(Token::new_keyword(kw)));
+    // }
 
     pub fn push_name<S: AsRef<str>>(&mut self, name: S) {
-        self.args.push(Box::new(Token::new_name(name.as_ref())));
+        self.contents
+            .args
+            .push(Box::new(Token::new_name(name.as_ref())));
     }
 
-    pub fn push_operator(&mut self, op: &str) {
-        self.args.push(Box::new(Token::new_operator(op)));
-    }
+    // pub fn push_operator(&mut self, op: &str) {
+    //     self.contents.args.push(Box::new(Token::new_operator(op)));
+    // }
 
-    pub fn push_suffix_chunk(&mut self, chunk: Box<dyn Chunk>) {
-        self.suffix.push(chunk);
-    }
+    // pub fn push_suffix_chunk(&mut self, chunk: Box<dyn Chunk>) {
+    //     self.suffix.push(chunk);
+    // }
 }
 
 impl Delimited for DelimitedExpression {}
@@ -459,11 +472,11 @@ impl Delimited for DelimitedExpression {}
 impl Chunk for DelimitedExpression {
     fn formatted(
         &self,
-        ctxt: FormatContext,
+        _: FormatContext,
         len: usize,
         indenter: &Indenter,
     ) -> Result<String, FormatterError> {
-        if self.args.is_empty() {
+        if self.contents.args.is_empty() {
             return Err(FormatterError::NoChunks {
                 what: "DelimitedExpression",
             });
@@ -472,9 +485,7 @@ impl Chunk for DelimitedExpression {
         let single = self.format_args_single_line(
             len,
             indenter,
-            &self.prefix,
-            &self.args,
-            &self.suffix,
+            &self.contents,
             &self.joiner,
             &self.delimiter,
         )?;
@@ -484,15 +495,7 @@ impl Chunk for DelimitedExpression {
         }
 
         let next = indenter.next_indenter();
-        self.format_args_multi_line(
-            len,
-            &next,
-            &self.prefix,
-            &self.args,
-            &self.suffix,
-            &self.joiner,
-            &self.delimiter,
-        )
+        self.format_args_multi_line(len, &next, &self.contents, &self.joiner, &self.delimiter)
     }
 
     fn first_keyword(&self) -> Option<&str> {
@@ -503,32 +506,32 @@ impl Chunk for DelimitedExpression {
 #[derive(Debug)]
 pub struct Func {
     name: Tokens,
-    prefix: Vec<Box<dyn Chunk>>,
-    args: Vec<Box<dyn Chunk>>,
-    suffix: Vec<Box<dyn Chunk>>,
+    contents: DelimiterContents,
 }
 
 impl Func {
     pub fn new(name: Tokens) -> Self {
         Self {
             name,
-            prefix: vec![],
-            args: vec![],
-            suffix: vec![],
+            contents: DelimiterContents {
+                prefix: vec![],
+                args: vec![],
+                suffix: vec![],
+            },
         }
     }
 
     pub fn push_prefix_chunk(&mut self, chunk: Box<dyn Chunk>) {
-        self.prefix.push(chunk);
+        self.contents.prefix.push(chunk);
     }
 
     pub fn push_chunk(&mut self, chunk: Box<dyn Chunk>) {
-        self.args.push(chunk);
+        self.contents.args.push(chunk);
     }
 
-    pub fn push_suffix_chunk(&mut self, chunk: Box<dyn Chunk>) {
-        self.suffix.push(chunk);
-    }
+    // pub fn push_suffix_chunk(&mut self, chunk: Box<dyn Chunk>) {
+    //     self.suffix.push(chunk);
+    // }
 }
 
 impl Delimited for Func {}
@@ -540,7 +543,7 @@ impl Chunk for Func {
         len: usize,
         indenter: &Indenter,
     ) -> Result<String, FormatterError> {
-        if self.args.is_empty() {
+        if self.contents.args.is_empty() {
             return Err(FormatterError::NoChunks { what: "Func" });
         }
 
@@ -548,15 +551,13 @@ impl Chunk for Func {
         let single = self.format_args_single_line(
             len,
             indenter,
-            &self.prefix,
-            &self.args,
-            &self.suffix,
+            &self.contents,
             &Joiner::Comma,
             &Delimiter::Paren,
         )?;
 
         if len + name.len() + single.len() <= indenter.max_line_len {
-            let mut out = name.clone();
+            let mut out = name;
             out.push_str(&single);
             return Ok(out);
         }
@@ -566,9 +567,7 @@ impl Chunk for Func {
         out.push_str(&self.format_args_multi_line(
             len,
             &next,
-            &self.prefix,
-            &self.args,
-            &self.suffix,
+            &self.contents,
             &Joiner::Comma,
             &Delimiter::Paren,
         )?);
@@ -607,7 +606,7 @@ impl Chunk for SubStatement {
     ) -> Result<String, FormatterError> {
         let mut out = String::new();
         if !self.is_inline {
-            out.push_str("(");
+            out.push('(');
         }
         out.push('\n');
 
@@ -667,9 +666,13 @@ impl Chunk for BoolOpChunk {
         let mut out = start_from_context(ctxt);
         out.push_str(&self.left.formatted(ctxt, len, indenter)?);
         out.push('\n');
-        out.push_str(&indenter.indent(self.bool_op.as_str()));
-        out.push(' ');
-        out.push_str(&self.right.formatted(ctxt, len, indenter)?);
+
+        let mut right = self.bool_op.as_str().to_string();
+        right.push(' ');
+        right.push_str(&self.right.formatted(ctxt, len, indenter)?);
+
+        out.push_str(&indenter.indent(right));
+
         Ok(out)
     }
 
@@ -778,6 +781,11 @@ impl Chunk for UpdateSet {
             return Err(FormatterError::NoValues);
         }
 
+        // This makes a new TabStop indenter, but we want it to be at the same
+        // level as the Gutter indenter's gutter.
+        let mut next = indenter.next_indenter();
+        next.current = indenter.current;
+
         let mut formatted_sets: Vec<String> = vec![];
         for (n, s) in self.set_clauses.iter().enumerate() {
             let prefix = if n == 0 { "SET " } else { "" };
@@ -792,7 +800,7 @@ impl Chunk for UpdateSet {
             // be done at the same "level". Maybe chunks need to return a Vec
             // of lines rather than strings that might contain newlines?
             if n > 0 {
-                line = indenter.indent(line);
+                line = next.indent(line);
             }
             formatted_sets.push(line);
         }
@@ -829,7 +837,10 @@ impl Statement {
     }
 
     fn is_insert(&self) -> bool {
-        matches!(self.first_keyword(), Some("INSERT"))
+        if let Some(kw) = self.first_keyword() {
+            return kw.starts_with("INSERT ");
+        }
+        false
     }
 
     pub fn push_chunk(&mut self, chunk: Box<dyn Chunk>) {
@@ -879,6 +890,7 @@ impl Chunk for Statement {
     ) -> Result<String, FormatterError> {
         // DML statements are always formatted with multiple lines.
         if !(self.uses_gutter_indent() || self.is_insert()) {
+            debug!("trying single line for statement");
             let mut out = start_from_context(ctxt);
             out.push_str(
                 &indenter.indent(
@@ -896,20 +908,21 @@ impl Chunk for Statement {
         }
 
         let mut out = start_from_context(ctxt);
-        let next_indenter = indenter.next_indenter();
+        let next = indenter.next_indenter();
 
         for (i, c) in self.chunks.iter().enumerate() {
             // When formatting TabStop style (used for DDL statements) we
             // indent all lines after the first.
             let indenter = if i >= 1 && indenter.style == IndentStyle::TabStop {
                 debug!("Using next indenter for: {:#?}", c);
-                &next_indenter
+                &next
             } else {
                 debug!("Using current indenter for: {:#?}", c);
                 indenter
             };
 
             let formatted = c.formatted(FormatContext::MultiLine, len, &indenter)?;
+            debug!("C = [{}]", formatted);
             if i == 0 {
                 out.push_str(formatted.trim_start());
             } else {
@@ -952,8 +965,8 @@ impl Indenter {
         }
     }
 
-    fn indent<S: AsRef<str>>(&self, f: S) -> String {
-        let mut s = f.as_ref();
+    fn indent<S: AsRef<str>>(&self, s: S) -> String {
+        let mut s = s.as_ref();
         let starts_with_nl = s.starts_with('\n');
         s = s.trim_start();
 

@@ -4,7 +4,8 @@ DELETE with USING and WHERE
 DELETE FROM films USING producers
   WHERE producer_id = producers.id AND producers.name = 'foo'
 ----
-DELETE FROM films
+DELETE
+  FROM films
  USING producers
  WHERE producer_id = producers.id
    AND producers.name = 'foo'
@@ -15,7 +16,8 @@ DELETE with WHERE with subselect
 ----
 DELETE FROM films WHERE producer_id IN (SELECT id FROM producers WHERE name = 'foo')
 ----
-DELETE FROM films
+DELETE
+  FROM films
  WHERE producer_id IN (
            SELECT id
              FROM producers
@@ -28,7 +30,8 @@ DELETE WHERE
 ----
 DELETE FROM films WHERE kind != 'Musical'
 ----
-DELETE FROM films
+DELETE
+  FROM films
  WHERE kind <> 'Musical'
 ----
 
@@ -37,7 +40,8 @@ DELETE FROM films
 ----
 DELETE FROM films
 ----
-DELETE FROM films
+DELETE
+  FROM films
 ----
 
 ++++
@@ -45,7 +49,8 @@ DELETE with RETURNING
 ----
 DELETE FROM tasks WHERE status = 'DONE' RETURNING *
 ----
-DELETE FROM tasks
+DELETE
+  FROM tasks
  WHERE status = 'DONE'
 RETURNING *
 ----
@@ -55,6 +60,7 @@ RETURNING *
 ----
 DELETE FROM tasks WHERE CURRENT OF c_tasks
 ----
-DELETE FROM tasks
+DELETE
+  FROM tasks
  WHERE CURRENT OF c_tasks
 ----

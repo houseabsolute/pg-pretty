@@ -312,6 +312,7 @@ INSERT INTO films ( code, title, did, date_prod, kind )
 OVERRIDING USER VALUE
 VALUES ( 'T_601', 'Yojimbo', 106, '1961-06-16', 'Drama' )
 ON CONFLICT (code)
-DO UPDATE SET title = 'Rashomon'
+DO UPDATE
+      SET title = 'Rashomon'
 RETURNING code AS studio_code, title, something, release_date AS d, genre, run_time
 ----

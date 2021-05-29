@@ -102,7 +102,6 @@ CREATE INDEX IF NOT EXISTS sales_quantity_index ON sales_table USING gist (quant
 ----
 CREATE INDEX IF NOT EXISTS sales_quantity_index
     ON sales_table
-    USING gist
-    ( quantity, some_func( some_column, another_col ) )
+    USING gist ( quantity, some_func( some_column, another_col ) )
     WITH ( FILLFACTOR = 70 )
 ----
