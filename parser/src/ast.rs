@@ -87,6 +87,15 @@ pub enum CreateStmtElement {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
+pub enum FromClauseElement {
+    JoinExpr(JoinExpr),
+    RangeVar(RangeVar),
+    RangeSubselect(RangeSubselect),
+    RangeFunction(RangeFunction),
+    RangeTableSample(RangeTableSample),
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Exclusion(pub Node, pub Vec<Node>);
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -1930,7 +1939,7 @@ pub struct DeleteStmt {
     pub relation: RangeVarWrapper, // RangeVar*
     // optional using clause for more tables
     #[serde(rename = "usingClause")]
-    pub using_clause: Option<List>, // List*
+    pub using_clause: Option<Vec<FromClauseElement>>, // List*
     // qualifications
     #[serde(rename = "whereClause")]
     pub where_clause: Option<Box<Node>>, // Node*
@@ -3755,7 +3764,7 @@ pub struct SelectStmt {
     pub target_list: Option<List>, // List*
     // the FROM clause
     #[serde(rename = "fromClause")]
-    pub from_clause: Option<List>, // List*
+    pub from_clause: Option<Vec<FromClauseElement>>, // List*
     // WHERE qualification
     #[serde(rename = "whereClause")]
     pub where_clause: Option<Box<Node>>, // Node*
@@ -4328,7 +4337,7 @@ pub struct UpdateStmt {
     pub where_clause: Option<Box<Node>>, // Node*
     // optional from clause for more tables
     #[serde(rename = "fromClause")]
-    pub from_clause: Option<List>, // List*
+    pub from_clause: Option<Vec<FromClauseElement>>, // List*
     // list of expressions to return
     #[serde(rename = "returningList")]
     pub returning_list: Option<Vec<ResTargetWrapper>>, // List*

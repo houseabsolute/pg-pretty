@@ -1,4 +1,5 @@
 use log::debug;
+use std::collections::VecDeque;
 use std::fmt;
 use strum_macros::Display;
 use thiserror::Error;
@@ -9,6 +10,10 @@ pub enum FormatterError {
     NoChunks { what: &'static str },
     #[error("InsertValues does not have any values")]
     NoValues,
+    #[error("JoinClause has no first join")]
+    NoFirstJoin,
+    #[error("current indenter is a {style} indenter, not a Gutter indenter")]
+    CurrentIndenterIsNotGutter { style: String },
 }
 
 #[derive(Clone, Copy, Debug, Display, PartialEq)]
@@ -24,7 +29,7 @@ enum IndentStyle {
     TabStop,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Display, PartialEq)]
 pub enum Joiner {
     Comma,
     None,
@@ -32,7 +37,7 @@ pub enum Joiner {
     Space,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Display, PartialEq)]
 pub enum FormatContext {
     SingleLine,
     MultiLine,
@@ -69,7 +74,7 @@ pub trait Chunk: fmt::Debug {
     fn first_keyword(&self) -> Option<&str>;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Display, PartialEq)]
 pub enum Token {
     // SELECT, CREATE, etc.
     Keyword(String),
@@ -298,7 +303,7 @@ impl Chunk for ChunkList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Display, PartialEq)]
 pub enum Delimiter {
     Paren,
     Square,
@@ -589,7 +594,8 @@ pub struct SubStatement {
 }
 
 impl SubStatement {
-    pub fn new(stmt: Statement, requires_parens: bool) -> Self {
+    pub fn new(mut stmt: Statement, requires_parens: bool) -> Self {
+        stmt.is_inline_sub_statement = !requires_parens;
         Self {
             stmt,
             is_inline: requires_parens,
@@ -605,26 +611,31 @@ impl Chunk for SubStatement {
         indenter: &Indenter,
     ) -> Result<String, FormatterError> {
         let mut out = String::new();
-        if !self.is_inline {
+        if self.is_inline {
+            out.push('\n');
+        } else {
             out.push('(');
         }
-        out.push('\n');
 
-        let mut next = Indenter::first(
+        let first_kw = self.stmt.first_keyword().unwrap();
+        let next = Indenter::first(
             IndentStyle::Gutter,
             indenter.indent_width,
             indenter.max_line_len,
-            self.stmt.first_keyword().unwrap(),
-            None,
+            first_kw,
+            if self.is_inline {
+                None
+            } else {
+                Some(indenter.current + indenter.indent_width + first_kw.len() + 1)
+            },
         );
 
-        if !self.is_inline {
-            next.current += indenter.current + indenter.indent_width;
-        }
+        debug!("next = {:?}", next);
         out.push_str(&self.stmt.formatted(ctxt, len, &next)?);
 
         // The sub-statement will already have a trailing newline.
         if !self.is_inline {
+            out.push('\n');
             out.push_str(&indenter.indent(")"));
         }
 
@@ -781,12 +792,9 @@ impl Chunk for UpdateSet {
             return Err(FormatterError::NoValues);
         }
 
-        // This makes a new TabStop indenter, but we want it to be at the same
-        // level as the Gutter indenter's gutter.
-        let mut next = indenter.next_indenter();
-        next.current = indenter.current;
+        let next = indenter.next_indenter_past_gutter()?;
 
-        let mut formatted_sets: Vec<String> = vec![];
+        let mut lines: Vec<String> = vec![];
         for (n, s) in self.set_clauses.iter().enumerate() {
             let prefix = if n == 0 { "SET " } else { "" };
             let mut line = format!(
@@ -799,13 +807,15 @@ impl Chunk for UpdateSet {
             // some reconsideration to make indentation simpler. It should all
             // be done at the same "level". Maybe chunks need to return a Vec
             // of lines rather than strings that might contain newlines?
-            if n > 0 {
+            if n == 0 {
+                line = indenter.indent(line);
+            } else {
                 line = next.indent(line);
             }
-            formatted_sets.push(line);
+            lines.push(line);
         }
 
-        Ok(format!("\n{}", formatted_sets.join(",\n")))
+        Ok(lines.join(",\n"))
     }
 
     fn first_keyword(&self) -> Option<&str> {
@@ -814,10 +824,192 @@ impl Chunk for UpdateSet {
 }
 
 #[derive(Debug)]
+pub struct JoinClause {
+    is_first_from_element: bool,
+    first: Option<Box<dyn Chunk>>,
+    rest: VecDeque<JoinRHS>,
+}
+
+#[derive(Debug)]
+pub struct JoinRHS {
+    what: Box<dyn Chunk>,
+    join_type: Token,
+    condition: Option<JoinCondition>,
+}
+
+#[derive(Debug)]
+pub enum JoinCondition {
+    On(Box<dyn Chunk>),
+    Using(DelimitedExpression),
+}
+
+impl JoinClause {
+    pub fn new(is_first_from_element: bool) -> Self {
+        Self {
+            is_first_from_element,
+            first: None,
+            rest: VecDeque::new(),
+        }
+    }
+
+    pub fn set_first(&mut self, first: Box<dyn Chunk>) {
+        self.first = Some(first);
+    }
+
+    pub fn push_front_join(
+        &mut self,
+        what: Box<dyn Chunk>,
+        join_type: Token,
+        condition: Option<JoinCondition>,
+    ) {
+        self.rest.push_front(JoinRHS {
+            what,
+            join_type,
+            condition,
+        });
+    }
+
+    pub fn push_back_join(
+        &mut self,
+        what: Box<dyn Chunk>,
+        join_type: Token,
+        condition: Option<JoinCondition>,
+    ) {
+        self.rest.push_back(JoinRHS {
+            what,
+            join_type,
+            condition,
+        });
+    }
+}
+
+impl Chunk for JoinClause {
+    fn formatted(
+        &self,
+        _: FormatContext,
+        len: usize,
+        indenter: &Indenter,
+    ) -> Result<String, FormatterError> {
+        let first = match &self.first {
+            Some(f) => f,
+            None => return Err(FormatterError::NoFirstJoin),
+        };
+
+        let next = indenter.next_indenter_past_gutter()?;
+
+        let mut lines: Vec<String> = vec![];
+
+        // We trim the indentation of this and we will add it back if this
+        // join clause is not the first from element.
+        let mut first_line = first
+            .formatted(FormatContext::SingleLine, len, indenter)?
+            .trim_start()
+            .to_string();
+        debug!("First line = [{}]", first_line);
+
+        // We special case a single join with a USING clause and allow
+        // that to be written on one line. If we have more than one join,
+        // or an ON clause, we always use multiple lines.
+        if self.rest.len() == 1 {
+            match &self.rest[0].condition {
+                None => {
+                    let what = self.rest[0].what.formatted(
+                        FormatContext::SingleLine,
+                        indenter.current,
+                        indenter,
+                    )?;
+                    let single = format!(
+                        "{} {} {}",
+                        first_line,
+                        self.rest[0].join_type.as_str(),
+                        what,
+                    );
+                    if single.len() + indenter.current <= indenter.max_line_len {
+                        return match self.is_first_from_element {
+                            true => Ok(single),
+                            false => Ok(indenter.indent(single)),
+                        };
+                    }
+                }
+                Some(JoinCondition::Using(u)) => {
+                    let what = self.rest[0].what.formatted(
+                        FormatContext::SingleLine,
+                        indenter.current,
+                        indenter,
+                    )?;
+                    let using =
+                        u.formatted(FormatContext::SingleLine, indenter.current, indenter)?;
+                    let single = format!(
+                        "{} {} {} USING {}",
+                        first_line,
+                        self.rest[0].join_type.as_str(),
+                        what,
+                        using,
+                    );
+                    if single.len() + indenter.current <= indenter.max_line_len {
+                        return match self.is_first_from_element {
+                            true => Ok(single),
+                            false => Ok(indenter.indent(single)),
+                        };
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        if !self.is_first_from_element {
+            first_line = format!("\n{}", indenter.indent(&first_line));
+        }
+        lines.push(first_line);
+
+        for j in self.rest.iter() {
+            let what = j
+                .what
+                .formatted(FormatContext::SingleLine, indenter.current, indenter)?;
+            let line = next.indent(format!("{} {}", j.join_type.as_str(), what));
+
+            let next_next = next.next_indenter();
+            match &j.condition {
+                Some(JoinCondition::On(o)) => {
+                    let on =
+                        o.formatted(FormatContext::SingleLine, next_next.current, &next_next)?;
+                    let single = next.indent(format!("{} ON {}", line, on));
+                    if single.len() <= next.max_line_len {
+                        lines.push(single);
+                    } else {
+                        lines.push(line);
+                        lines.push(next_next.indent(format!("ON {}", on)));
+                    }
+                }
+                Some(JoinCondition::Using(u)) => {
+                    let using =
+                        u.formatted(FormatContext::SingleLine, indenter.current, indenter)?;
+                    let single = next.indent(format!("{} USING {}", line, using));
+                    if single.len() <= next.max_line_len {
+                        lines.push(single);
+                    } else {
+                        lines.push(line);
+                        lines.push(next_next.indent(format!("USING {}", using)));
+                    }
+                }
+                None => (),
+            }
+        }
+
+        Ok(lines.join("\n"))
+    }
+
+    fn first_keyword(&self) -> Option<&str> {
+        None
+    }
+}
+
+#[derive(Debug)]
 pub struct Statement {
     chunks: Vec<Box<dyn Chunk>>,
     max_line_len: usize,
     indent_width: usize,
+    is_inline_sub_statement: bool,
 }
 
 impl Statement {
@@ -826,6 +1018,7 @@ impl Statement {
             chunks: vec![],
             max_line_len,
             indent_width,
+            is_inline_sub_statement: false,
         }
     }
 
@@ -923,7 +1116,7 @@ impl Chunk for Statement {
 
             let formatted = c.formatted(FormatContext::MultiLine, len, &indenter)?;
             debug!("C = [{}]", formatted);
-            if i == 0 {
+            if i == 0 && !self.is_inline_sub_statement {
                 out.push_str(formatted.trim_start());
             } else {
                 out.push_str(&indenter.indent(&formatted));
@@ -993,10 +1186,10 @@ impl Indenter {
                         (self.current - 1) - sp
                     }
                 } else {
-                    d.push_str("will not indent");
+                    d.push_str(&format!("no space; to {}", self.current));
                     // Otherwise we just give up and won't indent this line at
                     // all.
-                    0
+                    self.current
                 }
             }
             IndentStyle::Insert | IndentStyle::TabStop => {
@@ -1031,6 +1224,20 @@ impl Indenter {
                 IndentStyle::Gutter => self.indent_width,
                 IndentStyle::Insert | IndentStyle::TabStop => self.current + self.indent_width,
             },
+        }
+    }
+
+    fn next_indenter_past_gutter(&self) -> Result<Self, FormatterError> {
+        match self.style {
+            IndentStyle::Gutter => Ok(Self {
+                style: IndentStyle::TabStop,
+                indent_width: self.indent_width,
+                max_line_len: self.max_line_len,
+                current: self.current,
+            }),
+            _ => Err(FormatterError::CurrentIndenterIsNotGutter {
+                style: format!("{}", self.style),
+            }),
         }
     }
 }

@@ -10,5 +10,5 @@ edition = "2018"
 
 [dependencies]
 eyre = "~0.6"
-pg-pretty-formatter = { version = "0.0.1", path = "../formatter" }
+#pg-pretty-formatter = { version = "0.0.1", path = "../formatter" }
 pg-pretty-parser = { version = "0.0.1", path = "../parser" }

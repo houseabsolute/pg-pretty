@@ -3,7 +3,6 @@ extern crate lazy_static;
 
 use anyhow::{anyhow, Error};
 use k9::assert_greater_than;
-use log::debug;
 use pg_pretty_formatter::Transformer;
 use pg_pretty_parser::parser;
 use prettydiff::diff_lines;

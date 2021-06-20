@@ -72,6 +72,8 @@ pub enum TransformerError {
     BoolExprWithWrongNumberOfArguments { bool_op: &'static str, num: usize },
     #[error("{sublink_type} sublink without an operator")]
     SubLinkHasNoOperator { sublink_type: &'static str },
+    #[error("coercion_form should never be CoerceExplicitCast for a RowExpr")]
+    RowExprWithExplicitCast,
     #[error("{source:}")]
     IntervalMaskError {
         #[from]
@@ -124,7 +126,7 @@ impl Transformer {
                     Node::DeleteStmt(d) => self.delete_stmt(d)?,
                     Node::InsertStmt(i) => self.insert_stmt(i)?,
                     Node::SelectStmt(s) => self.select_stmt(s)?,
-                    // Node::UpdateStmt(u) => self.format_update_stmt(u),
+                    Node::UpdateStmt(u) => self.update_stmt(u)?,
 
                     // // CREATE statements
                     // Node::CreateStmt(c) => self.format_create_table_stmt(c),
@@ -166,7 +168,7 @@ impl Transformer {
             // don't think so, since formatting for those two always calls
             // res_target() directly, rather than through node().
             Node::ResTarget(r) => self.res_target(r, false),
-            //            Node::RowExpr(r) => self.row_expr(r),
+            Node::RowExpr(r) => self.row_expr(r),
             Node::SetToDefault(_) => Ok(Box::new(Token::new_keyword("DEFAULT"))),
             //            Node::SQLValueFunction(f) => Ok(self.sql_value_function(f)),
 
@@ -326,32 +328,32 @@ impl Transformer {
         Ok(select)
     }
 
-    // //#[trace]
-    // fn format_update_stmt(&mut self, u: &UpdateStmt) -> R {
-    //     let mut formatter = new_context!(self, ContextType::UpdateStmt);
+    //#[trace]
+    fn update_stmt(&mut self, u: &UpdateStmt) -> Result<Statement> {
+        let mut update = Statement::new(self.max_line_len, self.indent_width);
 
-    //     let RangeVarWrapper::RangeVar(r) = &u.relation;
+        let mut update_clause = ChunkList::new(Joiner::Space);
+        update_clause.push_keyword("UPDATE");
 
-    //     let mut update =
-    //         formatter.indent_str(&format!("UPDATE {}\n", formatter.format_range_var(r)));
+        let RangeVarWrapper::RangeVar(r) = &u.relation;
+        update_clause.push_chunk(self.range_var(r));
 
-    //     let maker = |f: &mut Formatter| f.update_stmt_res_target_lines(&u.target_list);
+        update.push_chunk(Box::new(update_clause));
 
-    //     update.push_str(&formatter.many_lines("SET ", false, false, true, maker)?);
-    //     update.push('\n');
+        update.push_chunk(self.res_targets_for_update(&u.target_list)?);
 
-    //     if let Some(f) = &u.from_clause {
-    //         update.push_str(&formatter.format_from_clause("FROM", f)?);
-    //     }
-    //     if let Some(w) = &u.where_clause {
-    //         update.push_str(&formatter.format_where_clause(w)?);
-    //     }
-    //     if let Some(r) = &u.returning_list {
-    //         update.push_str(&formatter.format_returning_clause(r)?);
-    //     }
+        if let Some(f) = &u.from_clause {
+            update.push_chunk(self.from_clause("FROM", f)?);
+        }
+        if let Some(w) = &u.where_clause {
+            update.push_chunk(self.where_clause(w)?);
+        }
+        if let Some(r) = &u.returning_list {
+            update.push_chunk(self.returning_clause(r)?);
+        }
 
-    //     Ok(update)
-    // }
+        Ok(update)
+    }
 
     // //#[trace]
     // fn format_create_table_stmt(&mut self, c: &CreateStmt) -> R {
@@ -637,9 +639,11 @@ impl Transformer {
             }
         }
 
+        let mut targets = ChunkList::new(Joiner::Comma);
         for t in tl {
-            select_clause.push_chunk(self.target_element(t)?);
+            targets.push_chunk(self.target_element(t)?);
         }
+        select_clause.push_chunk(Box::new(targets));
 
         Ok(Box::new(select_clause))
     }
@@ -1280,7 +1284,9 @@ impl Transformer {
         if let Some(n) = &s.testexpr {
             sub_link.push_chunk(self.node(&*n)?);
         }
-        sub_link.push_chunk(self.sub_link_oper(s)?);
+        if let Some(o) = self.sub_link_oper(s)? {
+            sub_link.push_chunk(o);
+        }
 
         let SelectStmtWrapper::SelectStmt(sub) = &s.subselect;
         sub_link.push_chunk(Box::new(SubStatement::new(self.select_stmt(sub)?, false)));
@@ -1289,40 +1295,48 @@ impl Transformer {
     }
 
     //#[trace]
-    fn sub_link_oper(&mut self, s: &SubLink) -> Result<Box<dyn Chunk>> {
+    fn sub_link_oper(&mut self, s: &SubLink) -> Result<Option<Box<dyn Chunk>>> {
         match s.sub_link_type {
-            SubLinkType::ExistsSublink => Ok(Box::new(Token::new_keyword("EXISTS"))),
+            SubLinkType::ExistsSublink => Ok(Some(Box::new(Token::new_keyword("EXISTS")))),
             SubLinkType::AllSublink => match &s.oper_name {
                 Some(o) => {
                     let mut oper = self.sub_link_oper_name(&o)?;
                     oper.push_keyword("ALL");
-                    Ok(Box::new(oper))
+                    Ok(Some(Box::new(oper)))
                 }
                 None => Err(TransformerError::SubLinkHasNoOperator {
                     sublink_type: "All",
                 }),
             },
             SubLinkType::AnySublink => match &s.oper_name {
-                None => Ok(Box::new(Token::new_keyword("IN"))),
+                None => Ok(Some(Box::new(Token::new_keyword("IN")))),
                 Some(o) => {
                     let mut oper = self.sub_link_oper_name(&o)?;
                     oper.push_keyword("ANY");
-                    Ok(Box::new(oper))
+                    Ok(Some(Box::new(oper)))
                 }
             },
             SubLinkType::RowcompareSublink => match &s.oper_name {
-                Some(o) => Ok(Box::new(self.sub_link_oper_name(&o)?)),
+                Some(o) => Ok(Some(Box::new(self.sub_link_oper_name(&o)?))),
                 None => Err(TransformerError::SubLinkHasNoOperator {
-                    sublink_type: "RowCompare",
+                    sublink_type: "Rowcompare",
                 }),
             },
-            // I'm not sure exactly what sort of SQL produces these two
-            // options.
-            SubLinkType::ExprSublink => panic!("how to handle SubLinkType::ExprSublink?"),
-            SubLinkType::MultiexprSublink => panic!("how to handle SubLinkType::MultiexprSublink?"),
-            SubLinkType::ArraySublink => Ok(Box::new(Token::new_keyword("ARRAY"))),
+            SubLinkType::ExprSublink => match &s.oper_name {
+                // Is this possible?
+                Some(o) => Ok(Some(Box::new(self.sub_link_oper_name(&o)?))),
+                None => Ok(None),
+            },
+            // Looking at the Pg (10) source, I don't think the parse can
+            // produce this type of sublink. Is it only for plans?
+            SubLinkType::MultiexprSublink => {
+                panic!("Found a MultiexprSublink, which is not possible according to the Pg 10 parser code")
+            }
+            SubLinkType::ArraySublink => Ok(Some(Box::new(Token::new_keyword("ARRAY")))),
             SubLinkType::CteSublink => {
-                panic!("I don't think this can ever happen in a SubLink as opposed to a SubPlan")
+                panic!(
+                    "Found a CteSublink, which is not possible according to the Pg 10 parser code"
+                )
             }
         }
     }
@@ -1343,18 +1357,26 @@ impl Transformer {
         Ok(oper_name)
     }
 
-    // //#[trace]
-    // fn format_row_expr(&mut self, r: &RowExpr) -> R {
-    //     let prefix = match r.row_format {
-    //         CoercionForm::CoerceExplicitCall => "ROW",
-    //         CoercionForm::CoerceImplicitCast => "",
-    //         CoercionForm::CoerceExplicitCast => {
-    //             panic!("coercion_form should never be CoerceExplicitCast for a RowExpr")
-    //         }
-    //     };
+    //#[trace]
+    fn row_expr(&mut self, r: &RowExpr) -> Result<Box<dyn Chunk>> {
+        let mut row_expr = ChunkList::new(Joiner::Space);
+        match r.row_format {
+            CoercionForm::CoerceExplicitCall => row_expr.push_keyword("ROW"),
+            CoercionForm::CoerceImplicitCast => (),
+            CoercionForm::CoerceExplicitCast => {
+                return Err(TransformerError::RowExprWithExplicitCast)
+            }
+        };
 
-    //     self.one_line_or_many(prefix, false, true, true, 0, |f| f.formatted_list(&r.args))
-    // }
+        let mut args = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+        for a in &r.args {
+            args.push_chunk(self.node(a)?);
+        }
+
+        row_expr.push_chunk(Box::new(args));
+
+        Ok(Box::new(row_expr))
+    }
 
     // //#[trace]
     // fn format_sql_value_function(&mut self, v: &SQLValueFunction) -> String {
@@ -1433,31 +1455,37 @@ impl Transformer {
     // }
 
     //#[trace]
-    fn from_clause(&mut self, keyword: &str, fc: &[Node]) -> Result<Box<dyn Chunk>> {
+    fn from_clause(&mut self, keyword: &str, fc: &[FromClauseElement]) -> Result<Box<dyn Chunk>> {
         let mut from = ChunkList::new(Joiner::Space);
         from.push_keyword(keyword);
 
-        for f in fc {
-            from.push_chunk(self.from_element(&f)?);
+        let mut from_elements = ChunkList::new(Joiner::Comma);
+        for (n, f) in fc.iter().enumerate() {
+            from_elements.push_chunk(self.from_element(&f, n == 0)?);
         }
+
+        from.push_chunk(Box::new(from_elements));
 
         Ok(Box::new(from))
     }
 
     //#[trace]
-    fn from_element(&mut self, f: &Node) -> Result<Box<dyn Chunk>> {
+    fn from_element(
+        &mut self,
+        f: &FromClauseElement,
+        is_first_from_element: bool,
+    ) -> Result<Box<dyn Chunk>> {
         match f {
-            Node::JoinExpr(j) => self.join_expr(&j),
-            Node::RangeVar(r) => Ok(self.range_var(&r)),
-            Node::RangeSubselect(s) => self.subselect(&s),
-            Node::RangeFunction(f) => self.range_function(&f),
-            Node::RangeTableSample(s) => self.range_table_sample(&s),
-            _ => panic!("unknown from element node: {:?}", f),
+            FromClauseElement::JoinExpr(j) => self.join_expr(&j, is_first_from_element),
+            FromClauseElement::RangeVar(r) => Ok(self.range_var(&r)),
+            FromClauseElement::RangeSubselect(s) => self.subselect(&s),
+            FromClauseElement::RangeFunction(f) => self.range_function(&f),
+            FromClauseElement::RangeTableSample(s) => self.range_table_sample(&s),
         }
     }
 
     //#[trace]
-    fn join_expr(&mut self, j: &JoinExpr) -> Result<Box<dyn Chunk>> {
+    fn join_expr(&mut self, j: &JoinExpr, is_first_from_element: bool) -> Result<Box<dyn Chunk>> {
         if j.is_natural {
             if j.quals.is_some() {
                 return Err(TransformerError::CannotMixJoinStrategies {
@@ -1480,24 +1508,68 @@ impl Transformer {
             });
         }
 
-        let mut join = ChunkList::new(Joiner::Space);
-        join.push_chunk(self.from_element(&j.larg)?);
-        join.push_chunk(self.join_type(j)?);
-        join.push_chunk(self.from_element(&j.rarg)?);
+        let mut current = j;
 
-        if let Some(q) = &j.quals {
-            join.push_chunk(self.join_qualifiers(&*q)?);
+        let mut join_clause = JoinClause::new(is_first_from_element);
+        // The right arg for the _first_ join expr is actually the last join
+        // RHS in the parsed SQL. The deepest left arg in the tree is the
+        // first LHS in the parsed SQL, so we push elements to the front of
+        // the list as we descend the tree.
+        while let Some(l) = self.left_is_join(current) {
+            join_clause.push_front_join(
+                self.join_element(&*l.rarg)?,
+                self.join_type(&l)?,
+                self.join_condition(l)?,
+            );
+            current = l;
         }
+        join_clause.set_first(self.join_element(&current.larg)?);
+        join_clause.push_back_join(
+            self.join_element(&*j.rarg)?,
+            self.join_type(&j)?,
+            self.join_condition(j)?,
+        );
 
-        if let Some(u) = &j.using_clause {
-            join.push_keyword("USING");
-            join.push_chunk(self.using_clause(u));
-        }
-
-        Ok(Box::new(join))
+        Ok(Box::new(join_clause))
     }
 
-    fn join_type(&self, j: &JoinExpr) -> Result<Box<dyn Chunk>> {
+    fn left_is_join<'a>(&self, j: &'a JoinExpr) -> Option<&'a JoinExpr> {
+        match &*j.larg {
+            Node::JoinExpr(l) => Some(l),
+            _ => None,
+        }
+    }
+
+    //#[trace]
+    fn join_element(&mut self, f: &Node) -> Result<Box<dyn Chunk>> {
+        match f {
+            Node::RangeFunction(f) => self.range_function(&f),
+            Node::RangeSubselect(s) => self.subselect(&s),
+            Node::RangeTableSample(s) => self.range_table_sample(&s),
+            Node::RangeVar(r) => Ok(self.range_var(&r)),
+            _ => Err(TransformerError::UnexpectedNode {
+                node: f.to_string(),
+                func: "join_element",
+            }),
+        }
+    }
+
+    fn join_condition(&mut self, j: &JoinExpr) -> Result<Option<JoinCondition>> {
+        if let Some(q) = &j.quals {
+            return Ok(Some(JoinCondition::On(self.node(&*q)?)));
+        }
+        if let Some(u) = &j.using_clause {
+            let mut using = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+            for StringStructWrapper::StringStruct(s) in u {
+                using.push_chunk(Box::new(Token::new_name(&s.str)));
+            }
+            return Ok(Some(JoinCondition::Using(using)));
+        }
+
+        Ok(None)
+    }
+
+    fn join_type(&self, j: &JoinExpr) -> Result<Token> {
         let jt = match &j.jointype {
             JoinType::JoinInner => {
                 if j.quals.is_some() || j.using_clause.is_some() || j.is_natural {
@@ -1517,47 +1589,10 @@ impl Transformer {
         };
 
         if j.is_natural {
-            return Ok(Box::new(Token::new_keyword(format!("NATURAL {}", jt))));
+            return Ok(Token::new_keyword(format!("NATURAL {}", jt)));
         }
 
-        Ok(Box::new(Token::new_keyword(jt)))
-    }
-
-    //#[trace]
-    fn join_qualifiers(&mut self, q: &Node) -> Result<Box<dyn Chunk>> {
-        let mut quals = ChunkList::new(Joiner::Space);
-        quals.push_keyword("ON");
-        quals.push_chunk(self.node(q)?);
-        Ok(Box::new(quals))
-    }
-
-    // //#[trace]
-    // fn format_using_clause(&self, u: &[StringStructWrapper]) -> String {
-    //     let mut using = "(".to_string();
-    //     if u.len() > 1 {
-    //         using.push(' ');
-    //     }
-    //     using.push_str(
-    //         u.iter()
-    //             .map(|StringStructWrapper::StringStruct(u)| u.str.clone())
-    //             .collect::<Vec<String>>()
-    //             .join(", ")
-    //             .as_str(),
-    //     );
-    //     if u.len() > 1 {
-    //         using.push(' ');
-    //     }
-    //     using.push(')');
-    //     using
-    // }
-
-    //#[trace]
-    fn using_clause(&self, u: &[StringStructWrapper]) -> Box<dyn Chunk> {
-        let mut using = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
-        for StringStructWrapper::StringStruct(s) in u {
-            using.push_chunk(Box::new(Token::new_name(&s.str)));
-        }
-        Box::new(using)
+        Ok(Token::new_keyword(jt))
     }
 
     // //#[trace]
@@ -2235,9 +2270,11 @@ impl Transformer {
                 let mut names: Vec<&String> = vec![];
                 let mut j = 1;
                 while j <= m.ncolumns {
-                    match &t.name {
-                        Some(n) => names.push(n),
-                        None => return Err(TransformerError::UpdateResTargetWithoutName),
+                    match &targets[i] {
+                        ResTargetWrapper::ResTarget(t) => match &t.name {
+                            Some(n) => names.push(n),
+                            None => return Err(TransformerError::UpdateResTargetWithoutName),
+                        },
                     }
                     i += 1;
                     j += 1;
@@ -2260,10 +2297,6 @@ impl Transformer {
         names: Vec<&String>,
     ) -> Result<Box<dyn Chunk>> {
         let mut multi_assign = ChunkList::new(Joiner::Space);
-        if names.len() == 1 {
-            multi_assign.push_name(names[0]);
-            return Ok(Box::new(multi_assign));
-        }
 
         multi_assign.push_chunk(self.multi_assign_ref_names(names));
         multi_assign.push_operator("=");
@@ -2274,6 +2307,8 @@ impl Transformer {
 
     //#[trace]
     fn multi_assign_ref_names(&self, names: Vec<&String>) -> Box<dyn Chunk> {
+        // I don't know if this can ever happen, but if it does, we can
+        // simplify this to a standard "x = y" SET clause.
         if names.len() == 1 {
             return Box::new(Token::new_name(names[0]));
         }

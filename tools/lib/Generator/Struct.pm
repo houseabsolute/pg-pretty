@@ -136,16 +136,19 @@ sub _one_field ( $self, $field ) {
 # like Node* or List*, but we know from examining the gram.y source that the
 # possible types are much narrower than "all nodes".
 my %overrides = (
-    AIndirection => { indirection   => 'Vec<IndirectionListElement>' },
-    AExpr        => { rexpr         => 'OneOrManyNodes' },
-    Alias        => { colnames      => 'Option<Vec<StringStruct>>' },
-    ColumnRef    => { fields        => 'Vec<ColumnRefField>' },
-    Constraint   => { exclusions    => 'Option<Vec<Exclusion>>' },
-    CreateStmt   => { tableElts     => 'Option<Vec<CreateStmtElement>>' },
-    DefElem      => { arg           => 'ValueOrTypeName' },
-    DeleteStmt   => { returningList => 'Option<Vec<ResTargetWrapper>>' },
-    Float        => { str           => 'String' },
-    InsertStmt   => {
+    AIndirection => { indirection => 'Vec<IndirectionListElement>' },
+    AExpr        => { rexpr       => 'OneOrManyNodes' },
+    Alias        => { colnames    => 'Option<Vec<StringStruct>>' },
+    ColumnRef    => { fields      => 'Vec<ColumnRefField>' },
+    Constraint   => { exclusions  => 'Option<Vec<Exclusion>>' },
+    CreateStmt   => { tableElts   => 'Option<Vec<CreateStmtElement>>' },
+    DefElem      => { arg         => 'ValueOrTypeName' },
+    DeleteStmt   => {
+        returningList => 'Option<Vec<ResTargetWrapper>>',
+        usingClause   => 'Option<Vec<FromClauseElement>>',
+    },
+    Float      => { str => 'String' },
+    InsertStmt => {
         selectStmt    => 'Option<SelectStmtWrapper>',
         cols          => 'Option<Vec<ResTargetWrapper>>',
         returningList => 'Option<Vec<ResTargetWrapper>>',
@@ -161,6 +164,7 @@ my %overrides = (
     ResTarget  => { indirection => 'Option<Vec<IndirectionListElement>>' },
     SelectStmt => {
         distinctClause => 'Option<Vec<Option<Node>>>',
+        fromClause     => 'Option<Vec<FromClauseElement>>',
         valuesLists    => 'Option<Vec<List>>',
         op             => 'SetOperation',
         larg           => 'Option<Box<SelectStmtWrapper>>',
@@ -169,6 +173,7 @@ my %overrides = (
     StringStruct => { str       => 'String' },
     SubLink      => { subselect => 'SelectStmtWrapper' },
     UpdateStmt   => {
+        fromClause    => 'Option<Vec<FromClauseElement>>',
         returningList => 'Option<Vec<ResTargetWrapper>>',
         targetList    => 'Vec<ResTargetWrapper>',
     },

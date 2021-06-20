@@ -1,10 +1,19 @@
 ++++
+comma-separated from list
+----
+SELECT * FROM x, y, z
+----
+SELECT *
+  FROM x, y, z
+----
+
+++++
 simple
 ----
 SELECT x FROM y
 ----
 SELECT x
-FROM y
+  FROM y
 ----
 
 ++++
@@ -13,7 +22,7 @@ SELECT *
 SELECT * FROM y
 ----
 SELECT *
-FROM y
+  FROM y
 ----
 
 ++++
@@ -22,8 +31,7 @@ comma-separated from list
 SELECT * FROM x, y
 ----
 SELECT *
-FROM x,
-     y
+  FROM x, y
 ----
 
 ++++
@@ -32,8 +40,7 @@ natural join
 SELECT * FROM x NATURAL JOIN y
 ----
 SELECT *
-FROM x
-     NATURAL JOIN y
+  FROM x NATURAL JOIN y
 ----
 
 ++++
@@ -42,9 +49,8 @@ FROM x
 SELECT x FROM y JOIN z ON y.foo = z.foo
 ----
 SELECT x
-FROM y
-     JOIN z
-         ON y.foo = z.foo
+  FROM y
+       JOIN z ON y.foo = z.foo
 ----
 
 ++++
@@ -55,8 +61,7 @@ SELECT x FROM y
 USING (foo)
 ----
 SELECT x
-FROM y
-     JOIN z USING (foo)
+  FROM y JOIN z USING (foo)
 ----
 
 ++++
@@ -67,8 +72,7 @@ SELECT x FROM y
 USING (foo, bar)
 ----
 SELECT x
-FROM y
-     JOIN z USING ( foo, bar )
+  FROM y JOIN z USING ( foo, bar )
 ----
 
 ++++
@@ -82,11 +86,10 @@ JOIN t4
  ON t2.x = t4.y
 ----
 SELECT a, b, c
-FROM t1
-     JOIN t2 USING (foo)
-     JOIN t3 USING (bar)
-     JOIN t4
-         ON t2.x = t4.y
+  FROM t1
+       JOIN t2 USING (foo)
+       JOIN t3 USING (bar)
+       JOIN t4 ON t2.x = t4.y
 ----
 
 ++++
@@ -97,10 +100,9 @@ FROM t1
 JOIN t2 ON t1.x = t2.x AND t1.y = t2.y
 ----
 SELECT a, b, c
-FROM t1
-     JOIN t2
-         ON t1.x = t2.x
-         AND t1.y = t2.y
+  FROM t1
+       JOIN t2 ON t1.x = t2.x
+           AND t1.y = t2.y
 ----
 
 ++++
@@ -112,16 +114,16 @@ JOIN t2 ON t1.x = t2.x AND t1.y = t2.y AND t1.z = t2.z AND t1.a = t2.a AND t1.b 
 JOIN t3 USING (foo)
 ----
 SELECT a, b, c
-FROM t1
-     JOIN t2
-         ON t1.x = t2.x
-         AND t1.y = t2.y
-         AND t1.z = t2.z
-         AND t1.a = t2.a
-         AND t1.b = t2.b
-         AND t1.c = t2.c
-         AND t1.d = t2.d
-     JOIN t3 USING (foo)
+  FROM t1
+       JOIN t2
+           ON t1.x = t2.x
+           AND t1.y = t2.y
+           AND t1.z = t2.z
+           AND t1.a = t2.a
+           AND t1.b = t2.b
+           AND t1.c = t2.c
+           AND t1.d = t2.d
+       JOIN t3 USING (foo)
 ----
 
 ++++
@@ -130,8 +132,7 @@ cross join
 SELECT * FROM my_table AS a CROSS JOIN my_table AS b
 ----
 SELECT *
-FROM my_table AS a
-     CROSS JOIN my_table AS b
+  FROM my_table AS a CROSS JOIN my_table AS b
 ----
 
 ++++
@@ -141,8 +142,7 @@ SELECT a, b, c
 FROM table1 AS t1 LEFT OUTER JOIN table2 AS t2 USING (t1_id)
 ----
 SELECT a, b, c
-FROM table1 AS t1
-     LEFT OUTER JOIN table2 AS t2 USING (t1_id)
+  FROM table1 AS t1 LEFT OUTER JOIN table2 AS t2 USING (t1_id)
 ----
 
 ++++
@@ -153,13 +153,12 @@ FROM ( SELECT x, y, z FROM t1 JOIN t2 USING (x)) AS sub
  JOIN t3 ON sub.foo = t3.foo
 ----
 SELECT a, b, c
-FROM (
-         SELECT x, y, z
-         FROM t1
-              JOIN t2 USING (x)
-     ) AS sub
-     JOIN t3
-         ON sub.foo = t3.foo
+  FROM (
+           SELECT x, y, z
+           FROM t1
+                JOIN t2 USING (x)
+       ) AS sub
+       JOIN t3 ON sub.foo = t3.foo
 ----
 
 ++++
