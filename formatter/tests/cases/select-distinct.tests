@@ -1,0 +1,39 @@
+++++
+DISTINCT 
+----
+SELECT DISTINCT location, time, report
+    FROM weather_reports
+----
+SELECT DISTINCT location, time, report
+  FROM weather_reports
+----
+
+++++
+DISTINCT ON
+----
+SELECT DISTINCT ON (location) location, time, report
+    FROM weather_reports
+----
+SELECT DISTINCT ON (location) location, time, report
+  FROM weather_reports
+----
+
+++++
+DISTINCT with very long ON
+----
+SELECT DISTINCT ON (very_long_column1, very_long_column2, very_long_column3, very_long_column4, very_long_column5, very_long_column6) location, time, report
+    FROM weather_reports
+----
+SELECT DISTINCT ON (
+    very_long_column1,
+    very_long_column2,
+    very_long_column3,
+    very_long_column4,
+    very_long_column5,
+    very_long_column6
+)
+    location,
+    time,
+    report
+  FROM weather_reports
+----
