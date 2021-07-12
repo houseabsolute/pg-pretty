@@ -4,6 +4,8 @@ use std::fmt;
 use strum_macros::Display;
 use thiserror::Error;
 
+type Result<T> = std::result::Result<T, FormatterError>;
+
 #[derive(Debug, Error)]
 pub enum FormatterError {
     #[error("{what} does not have any chunks")]
@@ -64,12 +66,9 @@ impl Joiner {
 }
 
 pub trait Chunk: fmt::Debug {
-    fn formatted(
-        &self,
-        ctxt: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError>;
+    fn formatted(&self, ctxt: FormatContext, len: usize, indenter: &Indenter) -> Result<String>;
+
+    // fn formatted2(&self) -> Result<String>;
 
     fn first_keyword(&self) -> Option<&str>;
 }
@@ -79,7 +78,7 @@ pub enum Token {
     // SELECT, CREATE, etc.
     Keyword(String),
     // Column, table, type, etc. names
-    Name(String),
+    Identifier(String),
     // String constant
     StringConst(String),
     // Int or decimal constant
@@ -93,8 +92,8 @@ impl Token {
         Token::Keyword(kw.as_ref().into())
     }
 
-    pub fn new_name(name: &str) -> Self {
-        Token::Name(name.into())
+    pub fn new_identifier(identifier: &str) -> Self {
+        Token::Identifier(identifier.into())
     }
 
     pub fn new_string(string: &str) -> Self {
@@ -112,7 +111,7 @@ impl Token {
     fn as_str(&self) -> &str {
         match self {
             Token::Keyword(s) => &s,
-            Token::Name(s) => &s,
+            Token::Identifier(s) => &s,
             Token::StringConst(s) => &s,
             Token::Number(s) => &s,
             Token::Operator(s) => &s,
@@ -121,15 +120,10 @@ impl Token {
 }
 
 impl Chunk for Token {
-    fn formatted(
-        &self,
-        _: FormatContext,
-        _: usize,
-        _: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, _: FormatContext, _: usize, _: &Indenter) -> Result<String> {
         let t = match self {
             Token::Keyword(s) => s.to_uppercase(),
-            Token::Name(s) => {
+            Token::Identifier(s) => {
                 if s.contains(char::is_uppercase) {
                     format!(r#""{}""#, s)
                 } else {
@@ -142,6 +136,11 @@ impl Chunk for Token {
         };
         Ok(t)
     }
+
+    // fn formatted2(&self) -> Result<String> {
+    //     let i = Indenter::first(IndentStyle::Gutter, 0, 0, "foo", None);
+    //     self.formatted(FormatContext::SingleLine, 0, &i)
+    // }
 
     fn first_keyword(&self) -> Option<&str> {
         match self {
@@ -169,8 +168,8 @@ impl Tokens {
         self.tokens.push(Token::new_keyword(kw));
     }
 
-    pub fn push_name<S: AsRef<str>>(&mut self, name: S) {
-        self.tokens.push(Token::new_name(name.as_ref()));
+    pub fn push_identifier<S: AsRef<str>>(&mut self, identifier: S) {
+        self.tokens.push(Token::new_identifier(identifier.as_ref()));
     }
 
     pub fn push_operator(&mut self, operator: &str) {
@@ -186,23 +185,23 @@ impl Tokens {
 }
 
 impl Chunk for Tokens {
-    fn formatted(
-        &self,
-        ctxt: FormatContext,
-        _: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, ctxt: FormatContext, _: usize, indenter: &Indenter) -> Result<String> {
         let mut out = start_from_context(ctxt);
         out.push_str(
             &self
                 .tokens
                 .iter()
                 .map(|t| t.formatted(ctxt, 0, indenter))
-                .collect::<Result<Vec<_>, _>>()?
+                .collect::<Result<Vec<_>>>()?
                 .join(self.joiner.single_line_joiner()),
         );
         Ok(out)
     }
+
+    // fn formatted2(&self) -> Result<String> {
+    //     let i = Indenter::first(IndentStyle::Gutter, 0, 0, "foo", None);
+    //     self.formatted(FormatContext::SingleLine, 0, &i)
+    // }
 
     fn first_keyword(&self) -> Option<&str> {
         self.tokens[0].first_keyword()
@@ -231,8 +230,8 @@ impl ChunkList {
         self.chunks.push(Box::new(Token::new_keyword(kw)));
     }
 
-    pub fn push_name<S: AsRef<str>>(&mut self, name: S) {
-        self.chunks.push(Box::new(Token::new_name(name.as_ref())));
+    pub fn push_identifier<S: AsRef<str>>(&mut self, identifier: S) {
+        self.chunks.push(Box::new(Token::new_identifier(identifier.as_ref())));
     }
 
     pub fn push_operator(&mut self, op: &str) {
@@ -245,12 +244,7 @@ impl ChunkList {
 }
 
 impl Chunk for ChunkList {
-    fn formatted(
-        &self,
-        ctxt: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, ctxt: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         if self.is_empty() {
             return Err(FormatterError::NoChunks { what: "ChunkList" });
         }
@@ -260,7 +254,7 @@ impl Chunk for ChunkList {
             .chunks
             .iter()
             .map(|c| c.formatted(FormatContext::SingleLine, len, indenter))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>>>()?;
         for (i, f) in formatted.iter().enumerate() {
             // If one of the formatted chunks was a SubStatement, it will
             // already have its own leading newline, in which case joining it
@@ -268,6 +262,7 @@ impl Chunk for ChunkList {
             if i > 0 {
                 if f.starts_with('\n') {
                     out.push_str(self.joiner.multi_line_joiner());
+                    out.push('\n');
                 } else {
                     out.push_str(self.joiner.single_line_joiner());
                 }
@@ -278,7 +273,13 @@ impl Chunk for ChunkList {
         // If one of the chunks contains newlines we only want to look at the
         // length of the first line? I suspect there's a better way to
         // approach this.
-        if len + out.find('\n').unwrap_or_else(|| out.len()) <= indenter.max_line_len {
+        let indent_from = out.find('\n').unwrap_or_else(|| out.len());
+        let sl_len = out.len() - indent_from;
+        if len + sl_len <= indenter.max_line_len {
+            debug!(
+                "len = {}, first = {}, total = {}, max = {}",
+                len, indent_from, sl_len, indenter.max_line_len
+            );
             debug!("SL = [{}]", out);
             return Ok(out);
         }
@@ -290,8 +291,8 @@ impl Chunk for ChunkList {
                 .chunks
                 .iter()
                 .map(|c| c.formatted(FormatContext::MultiLine, len, &next))
-                .collect::<Result<Vec<_>, _>>()?
-                .join(self.joiner.multi_line_joiner()),
+                .collect::<Result<Vec<_>>>()?
+                .join(&format!("{}\n", self.joiner.multi_line_joiner())),
         );
 
         debug!("ML = [{}]", out);
@@ -333,7 +334,7 @@ pub trait Delimited {
         contents: &DelimiterContents,
         joiner: &Joiner,
         delimiter: &Delimiter,
-    ) -> Result<String, FormatterError> {
+    ) -> Result<String> {
         let (p, a, s) =
             self.formatted_chunks(FormatContext::SingleLine, len, indenter, contents)?;
         let args = a.join(joiner.single_line_joiner());
@@ -365,14 +366,19 @@ pub trait Delimited {
         contents: &DelimiterContents,
         joiner: &Joiner,
         delimiter: &Delimiter,
-    ) -> Result<String, FormatterError> {
+    ) -> Result<String> {
+        let next = match indenter.style {
+            IndentStyle::Gutter => indenter.next_indenter_past_gutter()?.next_indenter(),
+            _ => indenter.next_indenter(),
+        };
+
         let (p, a, s) =
             self.formatted_chunks(FormatContext::MultiLine, len, &indenter, contents)?;
         let args = a
             .iter()
             // We will remove any leading newlines and add trailing ones
             // instead.
-            .map(|a| indenter.indent(a.trim_start()))
+            .map(|a| next.indent(a.trim_start()))
             .collect::<Vec<_>>()
             .join(&format!("{}\n", joiner.multi_line_joiner()));
 
@@ -386,7 +392,7 @@ pub trait Delimited {
             args = args,
             suffix_separator = if s.is_empty() { "" } else { " " },
             suffix = s,
-            right_delim = right_delim,
+            right_delim = indenter.indent(right_delim.to_string()),
         ))
     }
 
@@ -396,25 +402,25 @@ pub trait Delimited {
         len: usize,
         indenter: &Indenter,
         contents: &DelimiterContents,
-    ) -> Result<(String, Vec<String>, String), FormatterError> {
+    ) -> Result<(String, Vec<String>, String)> {
         let p = contents
             .prefix
             .iter()
             .map(|c| c.formatted(ctxt, len, indenter))
-            .collect::<Result<Vec<_>, _>>()?
+            .collect::<Result<Vec<_>>>()?
             .join(" ");
 
         let a = contents
             .args
             .iter()
             .map(|c| c.formatted(ctxt, len, indenter))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         let s = contents
             .suffix
             .iter()
             .map(|c| c.formatted(ctxt, len, indenter))
-            .collect::<Result<Vec<_>, _>>()?
+            .collect::<Result<Vec<_>>>()?
             .join(" ");
 
         Ok((p, a, s))
@@ -430,10 +436,11 @@ pub struct DelimitedExpression {
     delimiter: Delimiter,
     contents: DelimiterContents,
     joiner: Joiner,
+    force_multi_line: bool,
 }
 
 impl DelimitedExpression {
-    pub fn new(delimiter: Delimiter, joiner: Joiner) -> Self {
+    pub fn new(delimiter: Delimiter, joiner: Joiner, force_multi_line: bool) -> Self {
         Self {
             delimiter,
             contents: DelimiterContents {
@@ -442,6 +449,7 @@ impl DelimitedExpression {
                 suffix: vec![],
             },
             joiner,
+            force_multi_line,
         }
     }
 
@@ -449,7 +457,7 @@ impl DelimitedExpression {
     //     self.prefix.push(chunk);
     // }
 
-    pub fn push_chunk(&mut self, chunk: Box<dyn Chunk>) {
+    pub fn push_args_chunk(&mut self, chunk: Box<dyn Chunk>) {
         self.contents.args.push(chunk);
     }
 
@@ -457,10 +465,10 @@ impl DelimitedExpression {
     //     self.contents.args.push(Box::new(Token::new_keyword(kw)));
     // }
 
-    pub fn push_name<S: AsRef<str>>(&mut self, name: S) {
+    pub fn push_args_identifier<S: AsRef<str>>(&mut self, identifier: S) {
         self.contents
             .args
-            .push(Box::new(Token::new_name(name.as_ref())));
+            .push(Box::new(Token::new_identifier(identifier.as_ref())));
     }
 
     // pub fn push_operator(&mut self, op: &str) {
@@ -475,12 +483,7 @@ impl DelimitedExpression {
 impl Delimited for DelimitedExpression {}
 
 impl Chunk for DelimitedExpression {
-    fn formatted(
-        &self,
-        _: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, _: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         if self.contents.args.is_empty() {
             return Err(FormatterError::NoChunks {
                 what: "DelimitedExpression",
@@ -495,12 +498,11 @@ impl Chunk for DelimitedExpression {
             &self.delimiter,
         )?;
 
-        if len + single.len() <= indenter.max_line_len {
+        if !self.force_multi_line && len + single.len() <= indenter.max_line_len {
             return Ok(single);
         }
 
-        let next = indenter.next_indenter();
-        self.format_args_multi_line(len, &next, &self.contents, &self.joiner, &self.delimiter)
+        self.format_args_multi_line(len, indenter, &self.contents, &self.joiner, &self.delimiter)
     }
 
     fn first_keyword(&self) -> Option<&str> {
@@ -526,11 +528,11 @@ impl Func {
         }
     }
 
-    pub fn push_prefix_chunk(&mut self, chunk: Box<dyn Chunk>) {
+    pub fn push_args_prefix_chunk(&mut self, chunk: Box<dyn Chunk>) {
         self.contents.prefix.push(chunk);
     }
 
-    pub fn push_chunk(&mut self, chunk: Box<dyn Chunk>) {
+    pub fn push_args_chunk(&mut self, chunk: Box<dyn Chunk>) {
         self.contents.args.push(chunk);
     }
 
@@ -542,12 +544,7 @@ impl Func {
 impl Delimited for Func {}
 
 impl Chunk for Func {
-    fn formatted(
-        &self,
-        ctxt: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, ctxt: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         if self.contents.args.is_empty() {
             return Err(FormatterError::NoChunks { what: "Func" });
         }
@@ -604,12 +601,7 @@ impl SubStatement {
 }
 
 impl Chunk for SubStatement {
-    fn formatted(
-        &self,
-        ctxt: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, ctxt: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         let mut out = String::new();
         if self.is_inline {
             out.push('\n');
@@ -652,43 +644,35 @@ impl Chunk for SubStatement {
 
 #[derive(Debug)]
 pub struct BoolOpChunk {
-    left: Box<dyn Chunk>,
     bool_op: Token,
-    right: Box<dyn Chunk>,
+    chunks: Vec<Box<dyn Chunk>>,
 }
 
 impl BoolOpChunk {
-    pub fn new(left: Box<dyn Chunk>, bool_op: Token, right: Box<dyn Chunk>) -> Self {
-        Self {
-            left,
-            bool_op,
-            right,
-        }
+    pub fn new(bool_op: Token, chunks: Vec<Box<dyn Chunk>>) -> Self {
+        Self { bool_op, chunks }
     }
 }
 
 impl Chunk for BoolOpChunk {
-    fn formatted(
-        &self,
-        ctxt: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, ctxt: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         let mut out = start_from_context(ctxt);
-        out.push_str(&self.left.formatted(ctxt, len, indenter)?);
-        out.push('\n');
+        out.push_str(&self.chunks[0].formatted(ctxt, len, indenter)?);
 
-        let mut right = self.bool_op.as_str().to_string();
-        right.push(' ');
-        right.push_str(&self.right.formatted(ctxt, len, indenter)?);
-
-        out.push_str(&indenter.indent(right));
+        let op = self.bool_op.as_str();
+        for i in 1..self.chunks.len() {
+            let mut next = "\n".to_string();
+            next.push_str(op);
+            next.push(' ');
+            next.push_str(&self.chunks[i].formatted(ctxt, len, indenter)?);
+            out.push_str(&indenter.indent(next));
+        }
 
         Ok(out)
     }
 
     fn first_keyword(&self) -> Option<&str> {
-        self.left.first_keyword()
+        self.chunks[0].first_keyword()
     }
 }
 
@@ -703,21 +687,16 @@ impl InsertValues {
     }
 
     pub fn push_values(&mut self, values: Vec<Box<dyn Chunk>>) {
-        let mut del = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+        let mut del = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
         for c in values {
-            del.push_chunk(c);
+            del.push_args_chunk(c);
         }
         self.values.push(del);
     }
 }
 
 impl Chunk for InsertValues {
-    fn formatted(
-        &self,
-        _: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, _: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         if self.values.is_empty() {
             return Err(FormatterError::NoValues);
         }
@@ -782,12 +761,7 @@ impl UpdateSet {
 }
 
 impl Chunk for UpdateSet {
-    fn formatted(
-        &self,
-        _: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, _: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         if self.set_clauses.is_empty() {
             return Err(FormatterError::NoValues);
         }
@@ -884,22 +858,20 @@ impl JoinClause {
 }
 
 impl Chunk for JoinClause {
-    fn formatted(
-        &self,
-        _: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, _: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         let first = match &self.first {
             Some(f) => f,
             None => return Err(FormatterError::NoFirstJoin),
         };
 
-        let next = indenter.next_indenter_past_gutter()?;
+        let next = match indenter.style {
+            IndentStyle::Gutter => indenter.next_indenter_past_gutter()?,
+            _ => indenter.next_indenter(),
+        };
 
         let mut lines: Vec<String> = vec![];
 
-        // We trim the indentation of this and we will add it back if this
+        // We trim the indentation off this and we will add it back if this
         // join clause is not the first from element.
         let mut first_line = first
             .formatted(FormatContext::SingleLine, len, indenter)?
@@ -1007,17 +979,17 @@ impl Chunk for JoinClause {
 #[derive(Debug)]
 pub struct Statement {
     chunks: Vec<Box<dyn Chunk>>,
-    max_line_len: usize,
     indent_width: usize,
+    max_line_len: usize,
     is_inline_sub_statement: bool,
 }
 
 impl Statement {
-    pub fn new(max_line_len: usize, indent_width: usize) -> Self {
+    pub fn new(indent_width: usize, max_line_len: usize) -> Self {
         Self {
             chunks: vec![],
-            max_line_len,
             indent_width,
+            max_line_len,
             is_inline_sub_statement: false,
         }
     }
@@ -1044,7 +1016,7 @@ impl Statement {
         self.chunks.push(Box::new(Token::new_keyword(kw)));
     }
 
-    pub fn as_string(&self, indent: Option<usize>) -> Result<String, FormatterError> {
+    pub fn as_string(&self, indent: Option<usize>) -> Result<String> {
         if self.chunks.is_empty() {
             return Err(FormatterError::NoChunks { what: "Statement" });
         }
@@ -1068,19 +1040,12 @@ impl Statement {
         let mut out = self.formatted(FormatContext::SingleLine, 0, &indenter)?;
         out.push('\n');
 
-        // The string may start with a newline if this was formatted as a
-        // multi-line statement.
         Ok(out)
     }
 }
 
 impl Chunk for Statement {
-    fn formatted(
-        &self,
-        ctxt: FormatContext,
-        len: usize,
-        indenter: &Indenter,
-    ) -> Result<String, FormatterError> {
+    fn formatted(&self, ctxt: FormatContext, len: usize, indenter: &Indenter) -> Result<String> {
         // DML statements are always formatted with multiple lines.
         if !(self.uses_gutter_indent() || self.is_insert()) {
             debug!("trying single line for statement");
@@ -1090,7 +1055,7 @@ impl Chunk for Statement {
                     self.chunks
                         .iter()
                         .map(|c| c.formatted(FormatContext::SingleLine, len, &indenter))
-                        .collect::<Result<Vec<_>, _>>()?
+                        .collect::<Result<Vec<_>>>()?
                         .join(" "),
                 ),
             );
@@ -1130,6 +1095,18 @@ impl Chunk for Statement {
         self.chunks[0].first_keyword()
     }
 }
+
+// pub struct DDLStatement {
+//     chunks: Vec<Box<dyn Chunk>>,
+// }
+
+// impl DDLStatement {
+//     fn formatted(&self, indenter: Option<Indenter>) -> Result<String> {
+//         let mut out = String::new();
+//         for c in self.chunks {}
+//         Ok(String::new())
+//     }
+// }
 
 #[derive(Debug)]
 pub struct Indenter {
@@ -1227,7 +1204,7 @@ impl Indenter {
         }
     }
 
-    fn next_indenter_past_gutter(&self) -> Result<Self, FormatterError> {
+    fn next_indenter_past_gutter(&self) -> Result<Self> {
         match self.style {
             IndentStyle::Gutter => Ok(Self {
                 style: IndentStyle::TabStop,
@@ -1248,3 +1225,154 @@ fn start_from_context(ctxt: FormatContext) -> String {
         FormatContext::MultiLine => String::from("\n"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::{anyhow, Error};
+    use prettydiff::diff_lines;
+
+    const INDENT_WIDTH: usize = 4;
+    const MAX_WIDTH: usize = 80;
+
+    #[test]
+    fn test_formatter_two_chunks() -> std::result::Result<(), Error> {
+        let mut chunks = ChunkList::new(Joiner::Space);
+        chunks.push_keyword("SELECT");
+        chunks.push_chunk(Box::new(Token::new_number("42")));
+        assert_formatted(Box::new(chunks), "SELECT", IndentStyle::Gutter, "SELECT 42")
+    }
+
+    #[test]
+    fn test_formatter_one_chunklist_that_wraps() -> std::result::Result<(), Error> {
+        env_logger::init();
+        let mut stmt = Statement::new(MAX_WIDTH, INDENT_WIDTH);
+
+        let mut select_clause = ChunkList::new(Joiner::Comma);
+
+        let mut first_column = ChunkList::new(Joiner::Space);
+        first_column.push_chunk(Box::new(Token::new_keyword("SELECT")));
+        first_column.push_chunk(Box::new(Token::new_identifier("column1")));
+        select_clause.push_chunk(Box::new(first_column));
+
+        let mut more_cols = ChunkList::new(Joiner::Comma);
+        for x in 1..=5 {
+            more_cols.push_chunk(Box::new(Token::new_identifier(&format!(
+                "a234567890_b234567890_{}",
+                x
+            ))));
+        }
+
+        select_clause.push_chunk(Box::new(more_cols));
+        stmt.push_chunk(Box::new(select_clause));
+
+        assert_formatted(
+            Box::new(stmt),
+            "SELECT",
+            IndentStyle::Gutter,
+            r#"
+SELECT column1,
+       a234567890_b234567890_1,
+       a234567890_b234567890_2,
+       a234567890_b234567890_3,
+       a234567890_b234567890_4,
+       a234567890_b234567890_5
+"#,
+        )
+    }
+
+    fn assert_formatted(
+        input: Box<dyn Chunk>,
+        first_kw: &str,
+        style: IndentStyle,
+        expect: &str,
+    ) -> std::result::Result<(), Error> {
+        let indenter = Indenter::first(style, INDENT_WIDTH, MAX_WIDTH, first_kw, None);
+        let got = input.formatted(FormatContext::SingleLine, 0, &indenter)?;
+
+        if expect != got {
+            let diff = diff_lines(expect.trim_start(), &got);
+            diff.names("expect", "got").prettytable();
+            return Err(anyhow!("did not get expected result"));
+        }
+        Ok(())
+    }
+}
+
+// Notes on design:
+//
+// Original approach was inline string formatting. Very messy, needed to track
+// a lot of context in formatter itself as we went. Too many special cases.
+//
+// Next was to turn an AST into some sort of tree thing with a lot _less_
+// detail, but enough to format.
+//
+// Abstract is a "chunk", which can be things like a single token, a list of
+// tokens, a list of chunks, and other specialized things like delimited
+// expressions, function calls, etc.
+//
+// Each chunk has a formatted() method that knows how to format itself. The
+// goal is to call formatted() recursively on each chunk that contains other
+// chunks until there are no more containers, then assemble this
+// backwards. The key chunk is a ChunkList. The idea is that a ChunkList is
+// either formatted on a single line, or its broken up across multiple lines,
+// one chunk to a line.
+//
+// Have to be careful when putting chunks in a list. For example, `SELECT
+// col1, col2`. It's tempting to do this:
+
+// Statement(
+//     [
+//         Keyword("SELECT"),
+//         [
+//             Identifier("col1"),
+//             Identifier("col2"),
+//         ],
+//     ]
+// )
+//
+// But if we had to wrap this we'd end up with this:
+//
+//     SELECT
+//            col1,
+//            col2
+//
+// When what we want is:
+//
+//     SELECT col1,
+//            col2
+//
+// So the right arrangement of chunks is this:
+//
+// Statement(
+//     [
+//         Keyword("SELECT"),
+//         Identifier("col1"),
+//         [
+//             Identifier("col2"),
+//         ],
+//     ]
+// )
+
+// All wrapped or none?
+//
+// If a sub-chunk wraps, the container chunk should wrap, and its container
+// and so on, up to the top level chunk. This avoids gross things like this:
+//
+//    SELECT col1, col2, some_function( 
+//               'long string goes here',
+//               'another string goes here'
+//           ), col3, col4
+//
+// Since the function wrapped, we should wrap the entire list of things being
+// selected:
+//
+//    SELECT col1,
+//           col2,
+//           some_function( 
+//               'long string goes here',
+//               'another string goes here'
+//           ),
+//           col3,
+//           col4
+

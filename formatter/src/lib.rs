@@ -41,7 +41,7 @@ pub enum TransformerError {
     #[error("range function node does not have any functions")]
     RangeFunctionDoesNotHaveAnyFunctions,
     #[error("range function's list of func calls contains a non-FuncCall node")]
-    RangeFunctionHasNonFuncCallFunction,
+    RangeFunctionHasNonFuncCallElement,
     #[error("frame options specified {opt} but did not contain a value")]
     FrameOptionsValueWithoutOffset { opt: String },
     #[error("select contained a res target without a val")]
@@ -190,7 +190,7 @@ impl Transformer {
 
     //#[trace]
     fn delete_stmt(&mut self, d: &DeleteStmt) -> Result<Statement> {
-        let mut delete = Statement::new(self.max_line_len, self.indent_width);
+        let mut delete = Statement::new(self.indent_width, self.max_line_len);
         delete.push_keyword("DELETE");
 
         let mut from = ChunkList::new(Joiner::Space);
@@ -216,23 +216,23 @@ impl Transformer {
 
     //#[trace]
     fn insert_stmt(&mut self, i: &InsertStmt) -> Result<Statement> {
-        let mut insert = Statement::new(self.max_line_len, self.indent_width);
+        let mut insert = Statement::new(self.indent_width, self.max_line_len);
 
-        let mut insert_cols_clause = ChunkList::new(Joiner::Space);
-        insert_cols_clause.push_keyword("INSERT INTO");
+        let mut insert_table_clause = ChunkList::new(Joiner::Space);
+        insert_table_clause.push_keyword("INSERT INTO");
 
         let RangeVarWrapper::RangeVar(r) = &i.relation;
-        insert_cols_clause.push_chunk(self.range_var(r));
+        insert_table_clause.push_chunk(self.range_var(r));
 
         if let Some(cols) = &i.cols {
-            let mut cols_clause = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+            let mut cols_clause = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
             for ResTargetWrapper::ResTarget(c) in cols {
-                cols_clause.push_chunk(self.res_target(c, false)?);
+                cols_clause.push_args_chunk(self.res_target(c, false)?);
             }
-            insert_cols_clause.push_chunk(Box::new(cols_clause));
+            insert_table_clause.push_chunk(Box::new(cols_clause));
         }
 
-        insert.push_chunk(Box::new(insert_cols_clause));
+        insert.push_chunk(Box::new(insert_table_clause));
 
         if let Some(o) = &i.r#override {
             let mut overriding_clause = Tokens::new(Joiner::None);
@@ -282,7 +282,7 @@ impl Transformer {
                 None => return Err(TransformerError::MissingSideForOp { side: "left", op }),
             };
 
-            let mut select_with_op = Statement::new(self.max_line_len, self.indent_width);
+            let mut select_with_op = Statement::new(self.indent_width, self.max_line_len);
             select_with_op.push_chunk(Box::new(left));
             select_with_op.push_keyword(&op);
             if s.all {
@@ -298,7 +298,7 @@ impl Transformer {
             None => return Err(TransformerError::NoTargetListForSelect),
         };
 
-        let mut select = Statement::new(self.max_line_len, self.indent_width);
+        let mut select = Statement::new(self.indent_width, self.max_line_len);
         select.push_chunk(self.select_clause(t, s.distinct_clause.as_ref())?);
         if let Some(f) = &s.from_clause {
             select.push_chunk(self.from_clause("FROM", f)?);
@@ -330,7 +330,7 @@ impl Transformer {
 
     //#[trace]
     fn update_stmt(&mut self, u: &UpdateStmt) -> Result<Statement> {
-        let mut update = Statement::new(self.max_line_len, self.indent_width);
+        let mut update = Statement::new(self.indent_width, self.max_line_len);
 
         let mut update_clause = ChunkList::new(Joiner::Space);
         update_clause.push_keyword("UPDATE");
@@ -545,7 +545,7 @@ impl Transformer {
 
     //#[trace]
     fn index_stmt(&mut self, i: &IndexStmt) -> Result<Statement> {
-        let mut index = Statement::new(self.max_line_len, self.indent_width);
+        let mut index = Statement::new(self.indent_width, self.max_line_len);
 
         let mut create = Tokens::new(Joiner::Space);
         create.push_keyword("CREATE");
@@ -563,7 +563,7 @@ impl Transformer {
         }
 
         if let Some(n) = &i.idxname {
-            create.push_name(n);
+            create.push_identifier(n);
         }
 
         index.push_chunk(Box::new(create));
@@ -584,15 +584,15 @@ impl Transformer {
             if a != "btree" {
                 let mut using = Tokens::new(Joiner::Space);
                 using.push_keyword("USING");
-                using.push_name(a);
+                using.push_identifier(a);
 
                 using_and_elems.push_chunk(Box::new(using));
             }
         }
 
-        let mut elems = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+        let mut elems = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
         for IndexElemWrapper::IndexElem(p) in &i.index_params {
-            elems.push_chunk(self.index_elem(p)?);
+            elems.push_args_chunk(self.index_elem(p)?);
         }
         using_and_elems.push_chunk(Box::new(elems));
         index.push_chunk(Box::new(using_and_elems));
@@ -600,9 +600,9 @@ impl Transformer {
         if let Some(opts) = &i.options {
             let mut with = ChunkList::new(Joiner::Space);
             with.push_keyword("WITH");
-            let mut with_opts = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+            let mut with_opts = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
             for DefElemWrapper::DefElem(d) in opts {
-                with_opts.push_chunk(self.def_elem(d)?);
+                with_opts.push_args_chunk(self.def_elem(d)?);
             }
             with.push_chunk(Box::new(with_opts));
             index.push_chunk(Box::new(with));
@@ -610,7 +610,7 @@ impl Transformer {
 
         if let Some(t) = &i.table_space {
             index.push_chunk(Box::new(Token::new_keyword("TABLESPACE")));
-            index.push_chunk(Box::new(Token::new_name(t)));
+            index.push_chunk(Box::new(Token::new_identifier(t)));
         }
 
         Ok(index)
@@ -688,7 +688,7 @@ impl Transformer {
             }
             if let Some(n) = &rt.name {
                 res_target.push_keyword("AS");
-                res_target.push_name(n);
+                res_target.push_identifier(n);
             }
         } else {
             let has_name = rt.name.is_some();
@@ -718,7 +718,7 @@ impl Transformer {
         i: Option<&Vec<IndirectionListElement>>,
     ) -> Result<Box<dyn Chunk>> {
         let mut name_ind = ChunkList::new(Joiner::Period);
-        name_ind.push_name(n);
+        name_ind.push_identifier(n);
         if let Some(l) = i {
             name_ind.push_chunk(self.indirection_list(l)?);
         };
@@ -750,7 +750,7 @@ impl Transformer {
             IndirectionListElement::AIndices(i) => self.a_indices(i),
             IndirectionListElement::AStar(_) => Ok(Box::new(Token::new_operator("*"))),
             IndirectionListElement::StringStruct(s) => {
-                Ok(Box::new(Token::new_name(s.str.as_str())))
+                Ok(Box::new(Token::new_identifier(s.str.as_str())))
             }
         }
     }
@@ -760,19 +760,19 @@ impl Transformer {
         let mut upper = ChunkList::new(Joiner::None);
         upper.push_chunk(self.node(&*i.uidx)?);
         if !i.is_slice {
-            let mut indices = DelimitedExpression::new(Delimiter::Square, Joiner::None);
-            indices.push_chunk(Box::new(upper));
+            let mut indices = DelimitedExpression::new(Delimiter::Square, Joiner::None, false);
+            indices.push_args_chunk(Box::new(upper));
             return Ok(Box::new(indices));
         }
 
-        let mut indices = DelimitedExpression::new(Delimiter::Square, Joiner::None);
+        let mut indices = DelimitedExpression::new(Delimiter::Square, Joiner::None, false);
 
         if let Some(l) = &i.lidx {
             let mut lower = ChunkList::new(Joiner::None);
             lower.push_chunk(self.node(&*l)?);
-            indices.push_chunk(Box::new(lower));
+            indices.push_args_chunk(Box::new(lower));
         }
-        indices.push_chunk(Box::new(upper));
+        indices.push_args_chunk(Box::new(upper));
         Ok(Box::new(indices))
     }
 
@@ -789,7 +789,7 @@ impl Transformer {
         let mut cr = Tokens::new(Joiner::Period);
         for f in &c.fields {
             match f {
-                ColumnRefField::StringStruct(s) => cr.push_name(&s.str),
+                ColumnRefField::StringStruct(s) => cr.push_identifier(&s.str),
                 ColumnRefField::AStar(_) => cr.push_operator("*"),
             }
         }
@@ -800,7 +800,7 @@ impl Transformer {
     fn current_of_expr(&self, c: &CurrentOfExpr) -> Box<dyn Chunk> {
         let mut current_of = ChunkList::new(Joiner::Space);
         current_of.push_keyword("CURRENT OF");
-        current_of.push_name(&c.cursor_name);
+        current_of.push_identifier(&c.cursor_name);
         Box::new(current_of)
     }
 
@@ -856,8 +856,8 @@ impl Transformer {
                 let mut name = Tokens::new(Joiner::None);
                 name.push_keyword("NULLIF");
                 let mut nullif = Func::new(name);
-                nullif.push_chunk(transformer.node(&*a.lexpr)?);
-                nullif.push_chunk(transformer.one_or_many_nodes(&a.rexpr)?);
+                nullif.push_args_chunk(transformer.node(&*a.lexpr)?);
+                nullif.push_args_chunk(transformer.one_or_many_nodes(&a.rexpr)?);
                 return Ok(Box::new(nullif));
             }
             AExprKind::AExprOf => {
@@ -954,10 +954,10 @@ impl Transformer {
         last_p: u8,
     ) -> Result<Box<dyn Chunk>> {
         if last_p > current_p {
-            let mut parens = DelimitedExpression::new(Delimiter::Paren, Joiner::Space);
-            parens.push_chunk(self.node(left)?);
-            parens.push_chunk(op);
-            parens.push_chunk(self.one_or_many_nodes(right)?);
+            let mut parens = DelimitedExpression::new(Delimiter::Paren, Joiner::Space, false);
+            parens.push_args_chunk(self.node(left)?);
+            parens.push_args_chunk(op);
+            parens.push_args_chunk(self.one_or_many_nodes(right)?);
             return Ok(Box::new(parens));
         }
 
@@ -975,9 +975,9 @@ impl Transformer {
             // something like "foo IN (1, 2)", but could it also be something
             // else that shouldn't be joined by commas?
             OneOrManyNodes::Many(many) => {
-                let mut expr = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+                let mut expr = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
                 for n in many {
-                    expr.push_chunk(self.node(n)?);
+                    expr.push_args_chunk(self.node(n)?);
                 }
                 Ok(Box::new(expr))
             }
@@ -1021,7 +1021,7 @@ impl Transformer {
             return Ok(Box::new(not));
         }
 
-        if b.args.len() != 2 {
+        if b.args.len() < 2 {
             return Err(TransformerError::BoolExprWithWrongNumberOfArguments {
                 bool_op,
                 num: b.args.len(),
@@ -1029,14 +1029,16 @@ impl Transformer {
         }
 
         let bool_clause = BoolOpChunk::new(
-            self.node(&b.args[0])?,
             Token::new_keyword(bool_op),
-            self.node(&b.args[1])?,
+            b.args
+                .iter()
+                .map(|n| self.node(n))
+                .collect::<Result<Vec<Box<dyn Chunk>>>>()?,
         );
 
         if self.bool_expr_depth > 1 {
-            let mut parens = DelimitedExpression::new(Delimiter::Paren, Joiner::None);
-            parens.push_chunk(Box::new(bool_clause));
+            let mut parens = DelimitedExpression::new(Delimiter::Paren, Joiner::None, false);
+            parens.push_args_chunk(Box::new(bool_clause));
             return Ok(Box::new(parens));
         }
 
@@ -1083,19 +1085,19 @@ impl Transformer {
             }
             _ => panic!("should never have a funcname element that is not a string"),
         }) {
-            name.push_name(n);
+            name.push_identifier(n);
         }
 
         let mut func = Func::new(name);
         // We'll ignore f.func_variadic since it's optional.
         if f.agg_star {
-            func.push_chunk(Box::new(Token::new_operator("*")));
+            func.push_args_chunk(Box::new(Token::new_operator("*")));
         } else {
             match &f.args {
                 Some(args) => {
                     for (i, arg) in args.iter().enumerate() {
                         if i == 0 && f.agg_distinct {
-                            func.push_prefix_chunk(Box::new(Token::new_keyword("DISTINCT")));
+                            func.push_args_prefix_chunk(Box::new(Token::new_keyword("DISTINCT")));
                         }
                         let mut a = ChunkList::new(Joiner::Space);
                         a.push_chunk(self.node(arg)?);
@@ -1104,7 +1106,7 @@ impl Transformer {
                             a.push_chunk(self.order_by_clause(ob)?);
                         }
 
-                        func.push_chunk(Box::new(a));
+                        func.push_args_chunk(Box::new(a));
                     }
                 }
                 None => (),
@@ -1142,11 +1144,11 @@ impl Transformer {
         // allow a name or refname? It seems like name isn't allowed in SELECT
         // clause (?) and refname is not allowed in WINDOW clause (?).
         if let Some(n) = &w.name {
-            window.push_name(n);
+            window.push_identifier(n);
         }
 
         if let Some(n) = &w.refname {
-            window.push_name(n);
+            window.push_identifier(n);
         }
         if let Some(p) = &w.partition_clause {
             window.push_chunk(self.partition_clause(&p)?);
@@ -1368,9 +1370,9 @@ impl Transformer {
             }
         };
 
-        let mut args = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+        let mut args = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
         for a in &r.args {
-            args.push_chunk(self.node(a)?);
+            args.push_args_chunk(self.node(a)?);
         }
 
         row_expr.push_chunk(Box::new(args));
@@ -1559,9 +1561,9 @@ impl Transformer {
             return Ok(Some(JoinCondition::On(self.node(&*q)?)));
         }
         if let Some(u) = &j.using_clause {
-            let mut using = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+            let mut using = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
             for StringStructWrapper::StringStruct(s) in u {
-                using.push_chunk(Box::new(Token::new_name(&s.str)));
+                using.push_args_chunk(Box::new(Token::new_identifier(&s.str)));
             }
             return Ok(Some(JoinCondition::Using(using)));
         }
@@ -1620,19 +1622,19 @@ impl Transformer {
     fn range_var(&self, r: &RangeVar) -> Box<dyn Chunk> {
         let mut names = Tokens::new(Joiner::Period);
         if let Some(c) = &r.catalogname {
-            names.push_name(c);
+            names.push_identifier(c);
         }
         if let Some(s) = &r.schemaname {
-            names.push_name(s);
+            names.push_identifier(s);
         }
-        names.push_name(&r.relname);
+        names.push_identifier(&r.relname);
 
         let mut rv = ChunkList::new(Joiner::Space);
         rv.push_chunk(Box::new(names));
         if let Some(AliasWrapper::Alias(a)) = &r.alias {
             let mut alias = Tokens::new(Joiner::Space);
             alias.push_keyword("AS");
-            alias.push_name(&a.aliasname);
+            alias.push_identifier(&a.aliasname);
 
             rv.push_chunk(Box::new(alias));
             // XXX - do something with colnames here?
@@ -1786,7 +1788,7 @@ impl Transformer {
                     })
                     .filter(|n| n != "pg_catalog");
                 for r in renamed {
-                    joined.push_name(r);
+                    joined.push_identifier(r);
                 }
                 joined
             }
@@ -1798,8 +1800,8 @@ impl Transformer {
         if let Some(m) = &tn.typemod {
             // A -1 means it has no modifier.
             if *m != -1 {
-                let mut typemod = DelimitedExpression::new(Delimiter::Paren, Joiner::None);
-                typemod.push_chunk(Box::new(Token::new_number(m.to_string().as_ref())));
+                let mut typemod = DelimitedExpression::new(Delimiter::Paren, Joiner::None, false);
+                typemod.push_args_chunk(Box::new(Token::new_number(m.to_string().as_ref())));
             }
         }
         if let Some(m) = &tn.typmods {
@@ -1827,8 +1829,8 @@ impl Transformer {
                     panic!("need to handle interval typmods.len > 1");
                 }
             } else {
-                let mut mods = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
-                mods.push_chunk(self.node(&m[0])?);
+                let mut mods = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
+                mods.push_args_chunk(self.node(&m[0])?);
                 type_name.push_chunk(Box::new(mods));
             }
         }
@@ -1836,13 +1838,13 @@ impl Transformer {
         if let Some(ab) = &tn.array_bounds {
             // XXX - is ", " the right joiner here? Can this ever have
             // multiple elements inside.
-            let mut bounds = DelimitedExpression::new(Delimiter::Square, Joiner::Comma);
+            let mut bounds = DelimitedExpression::new(Delimiter::Square, Joiner::Comma, false);
             for e in ab {
                 match e {
                     // If the element is -1 then this is an unbounded array,
                     // so there is no inside to append.
                     Node::Integer(Integer { ival: -1 }) => (),
-                    _ => bounds.push_chunk(self.node(e)?),
+                    _ => bounds.push_args_chunk(self.node(e)?),
                 }
             }
             type_name.push_chunk(Box::new(bounds));
@@ -1859,9 +1861,12 @@ impl Transformer {
         }
 
         let SelectStmtWrapper::SelectStmt(stmt) = &*s.subquery;
-        subselect.push_chunk(Box::new(self.select_stmt(&stmt)?));
+        let select = SubStatement::new(self.select_stmt(&stmt)?, false);
+        subselect.push_chunk(Box::new(select));
+
         if let Some(AliasWrapper::Alias(a)) = &s.alias {
-            subselect.push_name(&a.aliasname);
+            subselect.push_keyword("AS");
+            subselect.push_identifier(&a.aliasname);
         }
 
         Ok(Box::new(subselect))
@@ -1877,36 +1882,59 @@ impl Transformer {
         if rf.lateral {
             range_func.push_keyword("LATERAL");
         }
-        range_func.push_keyword("ROWS FROM");
 
-        let mut funcs = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
-        for f in &rf.functions {
-            match &f.0 {
-                Node::FuncCall(fc) => {
-                    let mut call = self.func_call(fc)?;
-                    if let Some(defs) = &f.1 {
-                        call.push_chunk(Box::new(Token::new_keyword("AS")));
-                        call.push_chunk(self.column_def_list(defs)?);
-                    }
-                    funcs.push_chunk(Box::new(call));
-                }
-                _ => return Err(TransformerError::RangeFunctionHasNonFuncCallFunction),
+        let elts = self.range_func_elements(&rf.functions)?;
+        let elements: Box<dyn Chunk> = if elts.len() == 1 {
+            let mut container = ChunkList::new(Joiner::Space);
+            for e in elts {
+                container.push_chunk(e);
             }
-        }
+            Box::new(container)
+        } else {
+            range_func.push_keyword("ROWS FROM");
+            let mut container = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, true);
+            for e in elts {
+                container.push_args_chunk(e);
+            }
+            Box::new(container)
+        };
+        range_func.push_chunk(elements);
 
         if rf.alias.is_some() || rf.coldeflist.is_some() {
             range_func.push_keyword("AS");
-        }
 
-        if let Some(AliasWrapper::Alias(a)) = &rf.alias {
-            range_func.push_name(&a.aliasname);
-        }
-
-        if let Some(defs) = &rf.coldeflist {
-            range_func.push_chunk(self.column_def_list(&defs)?);
+            if let Some(AliasWrapper::Alias(a)) = &rf.alias {
+                range_func.push_identifier(&a.aliasname);
+            }
+            if let Some(defs) = &rf.coldeflist {
+                range_func.push_chunk(self.column_def_list(&defs)?);
+            }
         }
 
         Ok(Box::new(range_func))
+    }
+
+    //#[trace]
+    fn range_func_elements(
+        &mut self,
+        elts: &[RangeFunctionElement],
+    ) -> Result<Vec<Box<dyn Chunk>>> {
+        let mut elements: Vec<Box<dyn Chunk>> = vec![];
+        for e in elts {
+            match &e.0 {
+                Node::FuncCall(fc) => {
+                    let mut call = self.func_call(fc)?;
+                    if let Some(defs) = &e.1 {
+                        call.push_chunk(Box::new(Token::new_keyword("AS")));
+                        call.push_chunk(self.column_def_list(defs)?);
+                    }
+                    elements.push(Box::new(call));
+                }
+                _ => return Err(TransformerError::RangeFunctionHasNonFuncCallElement),
+            }
+        }
+
+        Ok(elements)
     }
 
     //#[trace]
@@ -1921,17 +1949,17 @@ impl Transformer {
         }
         table_sample.push_chunk(Box::new(method));
 
-        let mut args = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+        let mut args = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
         for a in &rts.args {
-            args.push_chunk(self.node(a)?);
+            args.push_args_chunk(self.node(a)?);
         }
         table_sample.push_chunk(Box::new(args));
 
         if let Some(r) = &rts.repeatable {
             table_sample.push_keyword("REPEATABLE");
 
-            let mut repeatable = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
-            repeatable.push_chunk(self.node(&*r)?);
+            let mut repeatable = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
+            repeatable.push_args_chunk(self.node(&*r)?);
             table_sample.push_chunk(Box::new(repeatable));
         }
 
@@ -1940,9 +1968,9 @@ impl Transformer {
 
     //#[trace]
     fn column_def_list(&mut self, defs: &[ColumnDefWrapper]) -> Result<Box<dyn Chunk>> {
-        let mut column_def_list = ChunkList::new(Joiner::Comma);
+        let mut column_def_list = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
         for ColumnDefWrapper::ColumnDef(d) in defs {
-            column_def_list.push_chunk(self.column_def(d)?);
+            column_def_list.push_args_chunk(self.column_def(d)?);
         }
         Ok(Box::new(column_def_list))
     }
@@ -1952,7 +1980,7 @@ impl Transformer {
         // XXX - this might sometimes need to be rows instead, for create
         // table statements?
         let mut column_def = ChunkList::new(Joiner::Space);
-        column_def.push_name(&def.colname);
+        column_def.push_identifier(&def.colname);
 
         if let Some(TypeNameWrapper::TypeName(tn)) = &def.type_name {
             column_def.push_chunk(self.type_name(&tn)?);
@@ -2178,7 +2206,7 @@ impl Transformer {
 
         on_conflict_clause.push_chunk(Box::new(first_clause));
 
-        let mut do_update = Statement::new(self.max_line_len, self.indent_width);
+        let mut do_update = Statement::new(self.indent_width, self.max_line_len);
         do_update.push_keyword("DO UPDATE");
 
         match occ.target_list.as_ref() {
@@ -2199,9 +2227,9 @@ impl Transformer {
     fn infer_clause(&mut self, i: &InferClause) -> Result<Box<dyn Chunk>> {
         let mut infer_clause = ChunkList::new(Joiner::Space);
         if let Some(ie) = &i.index_elems {
-            let mut index_elems = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+            let mut index_elems = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
             for e in ie {
-                index_elems.push_chunk(self.node(e)?);
+                index_elems.push_args_chunk(self.node(e)?);
             }
             infer_clause.push_chunk(Box::new(index_elems));
             if let Some(w) = &i.where_clause {
@@ -2209,7 +2237,7 @@ impl Transformer {
             }
         } else if let Some(c) = &i.conname {
             infer_clause.push_keyword("ON CONSTRAINT");
-            infer_clause.push_name(c);
+            infer_clause.push_identifier(c);
         } else {
             return Err(TransformerError::InferClauseWithoutIndexElementsOrConstraint);
         }
@@ -2222,7 +2250,7 @@ impl Transformer {
         let mut elem = ChunkList::new(Joiner::Space);
 
         if let Some(n) = &i.name {
-            elem.push_chunk(Box::new(Token::new_name(n)));
+            elem.push_chunk(Box::new(Token::new_identifier(n)));
         } else if let Some(e) = &i.expr {
             elem.push_chunk(self.node(&*e)?);
         } else {
@@ -2235,7 +2263,7 @@ impl Transformer {
             // can ever be something other than a StringStruct.
             match &c[0] {
                 Node::StringStruct(StringStruct { str: name }) => {
-                    elem.push_chunk(Box::new(Token::new_name(name)));
+                    elem.push_chunk(Box::new(Token::new_identifier(name)));
                 }
                 _ => panic!("COLLATE name is not a string"),
             }
@@ -2310,12 +2338,12 @@ impl Transformer {
         // I don't know if this can ever happen, but if it does, we can
         // simplify this to a standard "x = y" SET clause.
         if names.len() == 1 {
-            return Box::new(Token::new_name(names[0]));
+            return Box::new(Token::new_identifier(names[0]));
         }
 
-        let mut left = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma);
+        let mut left = DelimitedExpression::new(Delimiter::Paren, Joiner::Comma, false);
         for n in names {
-            left.push_name(n);
+            left.push_args_identifier(n);
         }
         Box::new(left)
     }
