@@ -71,7 +71,7 @@ fn run_tests_from(p: path::PathBuf) -> Result<(), Error> {
         if !only.is_empty() && only != caps["name"] {
             continue;
         }
-        test_one_case(&file, &caps["name"], &caps["input"], &caps["expect"])?;
+        test_one_case(file, &caps["name"], &caps["input"], &caps["expect"])?;
     }
 
     assert_greater_than!(case_count, 0, format!("{} contains cases", file));

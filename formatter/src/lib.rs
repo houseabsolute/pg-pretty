@@ -1151,10 +1151,10 @@ impl Transformer {
             window.push_identifier(n);
         }
         if let Some(p) = &w.partition_clause {
-            window.push_chunk(self.partition_clause(&p)?);
+            window.push_chunk(self.partition_clause(p)?);
         }
         if let Some(ob) = &w.order_clause {
-            window.push_chunk(self.order_by_clause(&ob)?);
+            window.push_chunk(self.order_by_clause(ob)?);
         }
         if w.frame_options != FrameOptions::DEFAULTS {
             window.push_chunk(self.frame_options(w)?);
@@ -1302,7 +1302,7 @@ impl Transformer {
             SubLinkType::ExistsSublink => Ok(Some(Box::new(Token::new_keyword("EXISTS")))),
             SubLinkType::AllSublink => match &s.oper_name {
                 Some(o) => {
-                    let mut oper = self.sub_link_oper_name(&o)?;
+                    let mut oper = self.sub_link_oper_name(o)?;
                     oper.push_keyword("ALL");
                     Ok(Some(Box::new(oper)))
                 }
@@ -1313,20 +1313,20 @@ impl Transformer {
             SubLinkType::AnySublink => match &s.oper_name {
                 None => Ok(Some(Box::new(Token::new_keyword("IN")))),
                 Some(o) => {
-                    let mut oper = self.sub_link_oper_name(&o)?;
+                    let mut oper = self.sub_link_oper_name(o)?;
                     oper.push_keyword("ANY");
                     Ok(Some(Box::new(oper)))
                 }
             },
             SubLinkType::RowcompareSublink => match &s.oper_name {
-                Some(o) => Ok(Some(Box::new(self.sub_link_oper_name(&o)?))),
+                Some(o) => Ok(Some(Box::new(self.sub_link_oper_name(o)?))),
                 None => Err(TransformerError::SubLinkHasNoOperator {
                     sublink_type: "Rowcompare",
                 }),
             },
             SubLinkType::ExprSublink => match &s.oper_name {
                 // Is this possible?
-                Some(o) => Ok(Some(Box::new(self.sub_link_oper_name(&o)?))),
+                Some(o) => Ok(Some(Box::new(self.sub_link_oper_name(o)?))),
                 None => Ok(None),
             },
             // Looking at the Pg (10) source, I don't think the parse can
@@ -1463,7 +1463,7 @@ impl Transformer {
 
         let mut from_elements = ChunkList::new(Joiner::Comma);
         for (n, f) in fc.iter().enumerate() {
-            from_elements.push_chunk(self.from_element(&f, n == 0)?);
+            from_elements.push_chunk(self.from_element(f, n == 0)?);
         }
 
         from.push_chunk(Box::new(from_elements));
@@ -1478,11 +1478,11 @@ impl Transformer {
         is_first_from_element: bool,
     ) -> Result<Box<dyn Chunk>> {
         match f {
-            FromClauseElement::JoinExpr(j) => self.join_expr(&j, is_first_from_element),
-            FromClauseElement::RangeVar(r) => Ok(self.range_var(&r)),
-            FromClauseElement::RangeSubselect(s) => self.subselect(&s),
-            FromClauseElement::RangeFunction(f) => self.range_function(&f),
-            FromClauseElement::RangeTableSample(s) => self.range_table_sample(&s),
+            FromClauseElement::JoinExpr(j) => self.join_expr(j, is_first_from_element),
+            FromClauseElement::RangeVar(r) => Ok(self.range_var(r)),
+            FromClauseElement::RangeSubselect(s) => self.subselect(s),
+            FromClauseElement::RangeFunction(f) => self.range_function(f),
+            FromClauseElement::RangeTableSample(s) => self.range_table_sample(s),
         }
     }
 
@@ -1520,7 +1520,7 @@ impl Transformer {
         while let Some(l) = self.left_is_join(current) {
             join_clause.push_front_join(
                 self.join_element(&*l.rarg)?,
-                self.join_type(&l)?,
+                self.join_type(l)?,
                 self.join_condition(l)?,
             );
             current = l;
@@ -1528,7 +1528,7 @@ impl Transformer {
         join_clause.set_first(self.join_element(&current.larg)?);
         join_clause.push_back_join(
             self.join_element(&*j.rarg)?,
-            self.join_type(&j)?,
+            self.join_type(j)?,
             self.join_condition(j)?,
         );
 
@@ -1545,10 +1545,10 @@ impl Transformer {
     //#[trace]
     fn join_element(&mut self, f: &Node) -> Result<Box<dyn Chunk>> {
         match f {
-            Node::RangeFunction(f) => self.range_function(&f),
-            Node::RangeSubselect(s) => self.subselect(&s),
-            Node::RangeTableSample(s) => self.range_table_sample(&s),
-            Node::RangeVar(r) => Ok(self.range_var(&r)),
+            Node::RangeFunction(f) => self.range_function(f),
+            Node::RangeSubselect(s) => self.subselect(s),
+            Node::RangeTableSample(s) => self.range_table_sample(s),
+            Node::RangeVar(r) => Ok(self.range_var(r)),
             _ => Err(TransformerError::UnexpectedNode {
                 node: f.to_string(),
                 func: "join_element",
@@ -1861,7 +1861,7 @@ impl Transformer {
         }
 
         let SelectStmtWrapper::SelectStmt(stmt) = &*s.subquery;
-        let select = SubStatement::new(self.select_stmt(&stmt)?, false);
+        let select = SubStatement::new(self.select_stmt(stmt)?, false);
         subselect.push_chunk(Box::new(select));
 
         if let Some(AliasWrapper::Alias(a)) = &s.alias {
@@ -1907,7 +1907,7 @@ impl Transformer {
                 range_func.push_identifier(&a.aliasname);
             }
             if let Some(defs) = &rf.coldeflist {
-                range_func.push_chunk(self.column_def_list(&defs)?);
+                range_func.push_chunk(self.column_def_list(defs)?);
             }
         }
 
@@ -1983,7 +1983,7 @@ impl Transformer {
         column_def.push_identifier(&def.colname);
 
         if let Some(TypeNameWrapper::TypeName(tn)) = &def.type_name {
-            column_def.push_chunk(self.type_name(&tn)?);
+            column_def.push_chunk(self.type_name(tn)?);
         }
 
         Ok(Box::new(column_def))
@@ -2191,7 +2191,7 @@ impl Transformer {
         first_clause.push_keyword("ON CONFLICT");
 
         if let Some(InferClauseWrapper::InferClause(i)) = &occ.infer {
-            first_clause.push_chunk(self.infer_clause(&i)?);
+            first_clause.push_chunk(self.infer_clause(i)?);
         }
 
         match occ.action {
